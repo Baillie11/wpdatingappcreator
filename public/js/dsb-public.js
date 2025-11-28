@@ -1,0 +1,579 @@
+/**
+ * Dating Site Builder - Frontend JavaScript
+ * Handles AJAX for forms, messaging, likes, photo uploads
+ */
+
+(function($) {
+	'use strict';
+
+	const DSB = {
+		/**
+		 * Initialize all functionality
+		 */
+		init: function() {
+			this.registerForm();
+			this.loginForm();
+			this.forgotPasswordForm();
+			this.profileEditForm();
+			this.photoUpload();
+			this.likes();
+			this.messaging();
+			this.blockUser();
+			this.reportUser();
+			this.filters();
+		},
+
+		/**
+		 * Show message to user
+		 */
+		showMessage: function($container, message, type) {
+			$container.removeClass('success error').addClass(type).html(message).slideDown();
+			// Auto-hide success messages, keep errors visible longer
+			const hideDelay = type === 'error' ? 10000 : 5000;
+			setTimeout(function() {
+				$container.slideUp();
+			}, hideDelay);
+		},
+
+		/**
+		 * Registration form AJAX
+		 */
+		registerForm: function() {
+			$('#dsb-register-form').on('submit', function(e) {
+				e.preventDefault();
+				
+				const $form = $(this);
+				const $submit = $form.find('button[type="submit"]');
+				const $message = $form.find('.dsb-form-message');
+				
+				// Validate password match
+				const password = $('#reg_password').val();
+				const passwordConfirm = $('#reg_password_confirm').val();
+				
+				if (password !== passwordConfirm) {
+					DSB.showMessage($message, 'Passwords do not match', 'error');
+					return;
+				}
+				
+				// Disable submit button
+				$submit.prop('disabled', true).html('<span class="dsb-loading"></span> Creating account...');
+				
+				// Prepare data
+				const formData = {
+					action: 'dsb_register_user',
+					nonce: $form.find('[name="dsb_register_nonce"]').val(),
+					username: $('#reg_username').val(),
+					email: $('#reg_email').val(),
+					password: password,
+					display_name: $('#reg_display_name').val()
+				};
+				
+				// Submit via AJAX
+				$.post(dsbPublic.ajaxurl, formData, function(response) {
+					if (response.success) {
+						DSB.showMessage($message, response.data.message, 'success');
+						setTimeout(function() {
+							window.location.href = response.data.redirect_url;
+						}, 1000);
+					} else {
+						DSB.showMessage($message, response.data.message, 'error');
+						$submit.prop('disabled', false).text('Create Account');
+					}
+				}).fail(function() {
+					DSB.showMessage($message, 'An error occurred. Please try again.', 'error');
+					$submit.prop('disabled', false).text('Create Account');
+				});
+			});
+		},
+
+		/**
+		 * Login form AJAX
+		 */
+		loginForm: function() {
+			$('#dsb-login-form').on('submit', function(e) {
+				e.preventDefault();
+				
+				const $form = $(this);
+				const $submit = $form.find('button[type="submit"]');
+				const $message = $form.find('.dsb-form-message');
+				
+				// Disable submit button
+				$submit.prop('disabled', true).html('<span class="dsb-loading"></span> Logging in...');
+				
+				// Prepare data
+				const formData = {
+					action: 'dsb_login_user',
+					nonce: $form.find('[name="dsb_login_nonce"]').val(),
+					username: $('#login_username').val(),
+					password: $('#login_password').val(),
+					remember: $('[name="remember"]').is(':checked') ? 1 : 0
+				};
+				
+				// Submit via AJAX
+				$.post(dsbPublic.ajaxurl, formData, function(response) {
+					if (response.success) {
+						DSB.showMessage($message, response.data.message, 'success');
+						setTimeout(function() {
+							window.location.href = response.data.redirect_url;
+						}, 1000);
+					} else {
+						DSB.showMessage($message, response.data.message, 'error');
+						$submit.prop('disabled', false).text('Login');
+					}
+				}).fail(function() {
+					DSB.showMessage($message, 'An error occurred. Please try again.', 'error');
+					$submit.prop('disabled', false).text('Login');
+				});
+			});
+		},
+
+		/**
+		 * Forgot password form AJAX
+		 */
+		forgotPasswordForm: function() {
+			$('#dsb-forgot-password-form').on('submit', function(e) {
+				e.preventDefault();
+				
+				const $form = $(this);
+				const $submit = $form.find('button[type="submit"]');
+				const $message = $form.find('.dsb-form-message');
+				
+				// Disable submit button
+				$submit.prop('disabled', true).html('<span class="dsb-loading"></span> Sending...');
+				
+				// Prepare data
+				const formData = {
+					action: 'dsb_forgot_password',
+					nonce: $form.find('[name="dsb_forgot_password_nonce"]').val(),
+					email: $('#forgot_email').val()
+				};
+				
+				// Submit via AJAX
+				$.post(dsbPublic.ajaxurl, formData, function(response) {
+					if (response.success) {
+						DSB.showMessage($message, response.data.message, 'success');
+						$submit.prop('disabled', false).text('Send Reset Link');
+						$('#forgot_email').val(''); // Clear field
+					} else {
+						DSB.showMessage($message, response.data.message, 'error');
+						$submit.prop('disabled', false).text('Send Reset Link');
+					}
+				}).fail(function() {
+					DSB.showMessage($message, 'An error occurred. Please try again.', 'error');
+					$submit.prop('disabled', false).text('Send Reset Link');
+				});
+			});
+		},
+
+		/**
+		 * Profile edit form AJAX
+		 */
+		profileEditForm: function() {
+			$('#dsb-profile-edit-form').on('submit', function(e) {
+				e.preventDefault();
+				
+				const $form = $(this);
+				const $submit = $form.find('button[type="submit"]');
+				const $message = $form.find('.dsb-form-message');
+				
+				// Hide any existing message
+				$message.slideUp();
+				
+				// Disable submit button
+				$submit.prop('disabled', true).html('<span class="dsb-loading"></span> Saving...');
+				
+				// Prepare data - serialize form and add action
+				const formData = $form.serialize() + '&action=dsb_update_profile';
+				
+				// Submit via AJAX
+				$.post(dsbPublic.ajaxurl, formData, function(response) {
+					if (response.success) {
+						DSB.showMessage($message, response.data.message, 'success');
+						// Scroll to top of form to show success message
+						$('html, body').animate({
+							scrollTop: $form.offset().top - 100
+						}, 300);
+					} else {
+						const errorMsg = response.data && response.data.message 
+							? response.data.message 
+							: 'An error occurred while saving your profile.';
+						DSB.showMessage($message, errorMsg, 'error');
+						// Scroll to error message
+						$('html, body').animate({
+							scrollTop: $message.offset().top - 100
+						}, 300);
+					}
+					$submit.prop('disabled', false).text('Save Profile');
+				}).fail(function(xhr, status, error) {
+					let errorMsg = 'An error occurred. Please try again.';
+					if (xhr.responseJSON && xhr.responseJSON.data && xhr.responseJSON.data.message) {
+						errorMsg = xhr.responseJSON.data.message;
+					}
+					DSB.showMessage($message, errorMsg, 'error');
+					$submit.prop('disabled', false).text('Save Profile');
+				});
+			});
+		},
+
+		/**
+		 * Photo upload and management
+		 */
+		photoUpload: function() {
+			// Photo upload
+			$('#dsb-photo-upload').on('change', function() {
+				const files = this.files;
+				if (files.length === 0) return;
+				
+				const $grid = $('#dsb-photo-grid');
+				const formData = new FormData();
+				
+				formData.append('action', 'dsb_upload_photo');
+				formData.append('nonce', dsbPublic.nonce);
+				
+				// Upload each file
+				for (let i = 0; i < files.length; i++) {
+					if (i >= 10) break; // Max 10 photos
+					
+					const fileFormData = new FormData();
+					fileFormData.append('action', 'dsb_upload_photo');
+					fileFormData.append('nonce', dsbPublic.nonce);
+					fileFormData.append('photo', files[i]);
+					
+					$.ajax({
+						url: dsbPublic.ajaxurl,
+						type: 'POST',
+						data: fileFormData,
+						processData: false,
+						contentType: false,
+						success: function(response) {
+							if (response.success) {
+								location.reload(); // Reload to show new photo
+							} else {
+								alert(response.data.message || 'Upload failed');
+							}
+						}
+					});
+				}
+				
+				// Clear file input
+				$(this).val('');
+			});
+			
+			// Delete photo
+			$(document).on('click', '.dsb-delete-photo', function(e) {
+				e.preventDefault();
+				
+				if (!confirm(dsbPublic.strings.confirm_delete)) {
+					return;
+				}
+				
+				const $button = $(this);
+				const index = $button.data('index');
+				
+				$.post(dsbPublic.ajaxurl, {
+					action: 'dsb_delete_photo',
+					nonce: dsbPublic.nonce,
+					index: index
+				}, function(response) {
+					if (response.success) {
+						location.reload();
+					}
+				});
+			});
+			
+			// Set main photo
+			$(document).on('click', '.dsb-set-main-photo', function(e) {
+				e.preventDefault();
+				
+				const $button = $(this);
+				const index = $button.data('index');
+				
+				$.post(dsbPublic.ajaxurl, {
+					action: 'dsb_set_main_photo',
+					nonce: dsbPublic.nonce,
+					index: index
+				}, function(response) {
+					if (response.success) {
+						location.reload();
+					}
+				});
+			});
+		},
+
+		/**
+		 * Like/Unlike functionality
+		 */
+		likes: function() {
+			$(document).on('click', '.dsb-like-btn', function(e) {
+				e.preventDefault();
+				
+				const $button = $(this);
+				const userId = $button.data('user-id');
+				
+				// Optimistic UI update
+				$button.toggleClass('liked');
+				
+				$.post(dsbPublic.ajaxurl, {
+					action: 'dsb_toggle_like',
+					nonce: dsbPublic.nonce,
+					user_id: userId
+				}, function(response) {
+					if (response.success) {
+						if (response.data.liked) {
+							$button.addClass('liked');
+							$button.find('span').last().text('Liked');
+						} else {
+							$button.removeClass('liked');
+							$button.find('span').last().text('Like');
+						}
+						
+						// Show mutual match notification
+						if (response.data.mutual_match) {
+							alert('It\'s a match! You both liked each other!');
+						}
+					} else {
+						// Revert UI update on error
+						$button.toggleClass('liked');
+					}
+				});
+			});
+		},
+
+		/**
+		 * Messaging functionality
+		 */
+		messaging: function() {
+			const $wrapper = $('.dsb-conversation-wrapper');
+			if ($wrapper.length === 0) return;
+			
+			const otherUserId = $wrapper.data('user-id');
+			let lastMessageId = 0;
+			
+			// Get last message ID
+			const $lastMessage = $('.dsb-message').last();
+			if ($lastMessage.length) {
+				lastMessageId = $lastMessage.data('message-id') || 0;
+			}
+			
+			// Send message
+			$('#dsb-send-message-form').on('submit', function(e) {
+				e.preventDefault();
+				
+				const $form = $(this);
+				const $textarea = $('#dsb-message-input');
+				const $button = $form.find('button[type="submit"]');
+				const message = $textarea.val().trim();
+				
+				if (message === '') return;
+				
+				// Disable send button
+				$button.prop('disabled', true);
+				
+				$.post(dsbPublic.ajaxurl, {
+					action: 'dsb_send_message',
+					nonce: dsbPublic.messaging_nonce,
+					receiver_id: otherUserId,
+					message: message
+				}, function(response) {
+					if (response.success) {
+						// Clear textarea
+						$textarea.val('');
+						
+						// Add message to conversation
+						const messageHtml = `
+							<div class="dsb-message sent" data-message-id="${response.data.message_id}">
+								<div class="dsb-message-content">${escapeHtml(message)}</div>
+								<div class="dsb-message-time">Just now</div>
+							</div>
+						`;
+						$('#dsb-conversation-messages').append(messageHtml);
+						
+						// Scroll to bottom
+						DSB.scrollToBottom();
+						
+						// Update last message ID
+						lastMessageId = response.data.message_id;
+					} else {
+						alert(response.data.message || 'Failed to send message');
+					}
+					
+					$button.prop('disabled', false);
+				});
+			});
+			
+			// Poll for new messages every 5 seconds
+			if (otherUserId) {
+				setInterval(function() {
+					$.post(dsbPublic.ajaxurl, {
+						action: 'dsb_get_messages',
+						nonce: dsbPublic.messaging_nonce,
+						other_user_id: otherUserId,
+						last_message_id: lastMessageId
+					}, function(response) {
+						if (response.success && response.data.messages.length > 0) {
+							response.data.messages.forEach(function(msg) {
+								const isSent = msg.sender_id == dsbPublic.current_user_id;
+								const messageClass = isSent ? 'sent' : 'received';
+								const timeAgo = msg.time_ago || 'Just now';
+								
+								const messageHtml = `
+									<div class="dsb-message ${messageClass}" data-message-id="${msg.id}">
+										<div class="dsb-message-content">${escapeHtml(msg.message_text)}</div>
+										<div class="dsb-message-time">${timeAgo}</div>
+									</div>
+								`;
+								$('#dsb-conversation-messages').append(messageHtml);
+								
+								// Update last message ID
+								lastMessageId = msg.id;
+							});
+							
+							// Scroll to bottom
+							DSB.scrollToBottom();
+							
+							// Mark as read
+							$.post(dsbPublic.ajaxurl, {
+								action: 'dsb_mark_read',
+								nonce: dsbPublic.messaging_nonce,
+								other_user_id: otherUserId
+							});
+						}
+					});
+				}, 5000);
+			}
+		},
+
+		/**
+		 * Scroll conversation to bottom
+		 */
+		scrollToBottom: function() {
+			const $messages = $('#dsb-conversation-messages');
+			$messages.scrollTop($messages[0].scrollHeight);
+		},
+
+		/**
+		 * Block user
+		 */
+		blockUser: function() {
+			$(document).on('click', '.dsb-block-user-btn', function(e) {
+				e.preventDefault();
+				
+				if (!confirm(dsbPublic.strings.confirm_block)) {
+					return;
+				}
+				
+				const userId = $(this).data('user-id');
+				
+				$.post(dsbPublic.ajaxurl, {
+					action: 'dsb_block_user',
+					nonce: dsbPublic.messaging_nonce,
+					blocked_user_id: userId
+				}, function(response) {
+					if (response.success) {
+						alert(response.data.message);
+						// Redirect away from profile/conversation
+						window.location.href = window.location.origin;
+					} else {
+						alert(response.data.message || 'Failed to block user');
+					}
+				});
+			});
+		},
+
+		/**
+		 * Report user
+		 */
+		reportUser: function() {
+			$(document).on('click', '.dsb-report-btn', function(e) {
+				e.preventDefault();
+				
+				const userId = $(this).data('user-id');
+				const reason = prompt('Please provide a reason for reporting this user:');
+				
+				if (!reason || reason.trim() === '') {
+					return;
+				}
+				
+				$.post(dsbPublic.ajaxurl, {
+					action: 'dsb_report_user',
+					nonce: dsbPublic.messaging_nonce,
+					reported_user_id: userId,
+					reason: reason,
+					type: 'user'
+				}, function(response) {
+					if (response.success) {
+						alert(response.data.message);
+					} else {
+						alert(response.data.message || 'Failed to submit report');
+					}
+				});
+			});
+		},
+
+		/**
+		 * Member directory filters
+		 */
+		filters: function() {
+			$('#dsb-apply-filters').on('click', function(e) {
+				e.preventDefault();
+				
+				// Get filter values
+				const gender = $('#dsb-filter-gender').val();
+				const ageMin = $('#dsb-filter-age-min').val();
+				const ageMax = $('#dsb-filter-age-max').val();
+				const location = $('#dsb-filter-location').val();
+				
+				// Build query string
+				let url = window.location.pathname;
+				const params = [];
+				
+				if (gender) params.push('gender=' + encodeURIComponent(gender));
+				if (ageMin) params.push('age_min=' + encodeURIComponent(ageMin));
+				if (ageMax) params.push('age_max=' + encodeURIComponent(ageMax));
+				if (location) params.push('location=' + encodeURIComponent(location));
+				
+				if (params.length > 0) {
+					url += '?' + params.join('&');
+				}
+				
+				// Redirect with filters
+				window.location.href = url;
+			});
+			
+			// Clear filters on Enter key in filter inputs
+			$('.dsb-filter').on('keypress', function(e) {
+				if (e.which === 13) {
+					e.preventDefault();
+					$('#dsb-apply-filters').click();
+				}
+			});
+		}
+	};
+
+	/**
+	 * Escape HTML to prevent XSS
+	 */
+	function escapeHtml(text) {
+		const map = {
+			'&': '&amp;',
+			'<': '&lt;',
+			'>': '&gt;',
+			'"': '&quot;',
+			"'": '&#039;'
+		};
+		return text.replace(/[&<>"']/g, function(m) { return map[m]; });
+	}
+
+	/**
+	 * Initialize on document ready
+	 */
+	$(document).ready(function() {
+		DSB.init();
+		
+		// Scroll to bottom of messages on load
+		if ($('#dsb-conversation-messages').length) {
+			DSB.scrollToBottom();
+		}
+	});
+
+})(jQuery);

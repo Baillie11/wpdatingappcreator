@@ -1,0 +1,111 @@
+<?php
+/**
+ * The core plugin class.
+ *
+ * @package DatingSiteBuilder
+ */
+
+class DSB_Core {
+
+	/**
+	 * The loader that's responsible for maintaining and registering all hooks.
+	 *
+	 * @var DSB_Loader
+	 */
+	protected $loader;
+
+	/**
+	 * Initialize the plugin.
+	 */
+	public function __construct() {
+		$this->load_dependencies();
+		$this->define_admin_hooks();
+		$this->define_public_hooks();
+	}
+
+	/**
+	 * Load required dependencies.
+	 */
+	private function load_dependencies() {
+		// Core classes
+		require_once DSB_PLUGIN_DIR . 'includes/class-dsb-loader.php';
+		require_once DSB_PLUGIN_DIR . 'includes/class-dsb-profile-fields.php';
+		require_once DSB_PLUGIN_DIR . 'includes/class-dsb-matching.php';
+		require_once DSB_PLUGIN_DIR . 'includes/class-dsb-messaging.php';
+		require_once DSB_PLUGIN_DIR . 'includes/class-dsb-likes.php';
+		
+		// Admin classes
+		require_once DSB_PLUGIN_DIR . 'includes/class-dsb-admin.php';
+		
+		// Public classes
+		require_once DSB_PLUGIN_DIR . 'includes/class-dsb-frontend.php';
+
+		$this->loader = new DSB_Loader();
+	}
+
+	/**
+	 * Register all hooks related to admin area.
+	 */
+	private function define_admin_hooks() {
+		$plugin_admin = new DSB_Admin();
+
+		$this->loader->add_action( 'admin_menu', $plugin_admin, 'add_admin_menu' );
+		$this->loader->add_action( 'admin_init', $plugin_admin, 'register_settings' );
+		$this->loader->add_action( 'admin_enqueue_scripts', $plugin_admin, 'enqueue_styles' );
+		$this->loader->add_action( 'admin_enqueue_scripts', $plugin_admin, 'enqueue_scripts' );
+		
+		// AJAX handlers for admin
+		$this->loader->add_action( 'wp_ajax_dsb_save_wizard_step', $plugin_admin, 'save_wizard_step' );
+		$this->loader->add_action( 'wp_ajax_dsb_approve_profile', $plugin_admin, 'approve_profile' );
+		$this->loader->add_action( 'wp_ajax_dsb_ban_user', $plugin_admin, 'ban_user' );
+		$this->loader->add_action( 'wp_ajax_dsb_resolve_report', $plugin_admin, 'resolve_report' );
+	}
+
+	/**
+	 * Register all hooks related to public-facing functionality.
+	 */
+	private function define_public_hooks() {
+		$plugin_public = new DSB_Frontend();
+
+		$this->loader->add_action( 'wp_enqueue_scripts', $plugin_public, 'enqueue_styles' );
+		$this->loader->add_action( 'wp_enqueue_scripts', $plugin_public, 'enqueue_scripts' );
+		
+		// Register shortcodes
+		$this->loader->add_action( 'init', $plugin_public, 'register_shortcodes' );
+		
+		// AJAX handlers for public
+		$this->loader->add_action( 'wp_ajax_dsb_register_user', $plugin_public, 'ajax_register_user' );
+		$this->loader->add_action( 'wp_ajax_nopriv_dsb_register_user', $plugin_public, 'ajax_register_user' );
+		
+		$this->loader->add_action( 'wp_ajax_dsb_login_user', $plugin_public, 'ajax_login_user' );
+		$this->loader->add_action( 'wp_ajax_nopriv_dsb_login_user', $plugin_public, 'ajax_login_user' );
+		
+		$this->loader->add_action( 'wp_ajax_dsb_forgot_password', $plugin_public, 'ajax_forgot_password' );
+		$this->loader->add_action( 'wp_ajax_nopriv_dsb_forgot_password', $plugin_public, 'ajax_forgot_password' );
+		
+		$this->loader->add_action( 'wp_ajax_dsb_update_profile', $plugin_public, 'ajax_update_profile' );
+		$this->loader->add_action( 'wp_ajax_dsb_upload_photo', $plugin_public, 'ajax_upload_photo' );
+		$this->loader->add_action( 'wp_ajax_dsb_delete_photo', $plugin_public, 'ajax_delete_photo' );
+		$this->loader->add_action( 'wp_ajax_dsb_set_main_photo', $plugin_public, 'ajax_set_main_photo' );
+		
+		// Messaging AJAX
+		$messaging = new DSB_Messaging();
+		$this->loader->add_action( 'wp_ajax_dsb_send_message', $messaging, 'ajax_send_message' );
+		$this->loader->add_action( 'wp_ajax_dsb_get_messages', $messaging, 'ajax_get_messages' );
+		$this->loader->add_action( 'wp_ajax_dsb_mark_read', $messaging, 'ajax_mark_read' );
+		$this->loader->add_action( 'wp_ajax_dsb_block_user', $messaging, 'ajax_block_user' );
+		$this->loader->add_action( 'wp_ajax_dsb_report_user', $messaging, 'ajax_report_user' );
+		
+		// Likes AJAX
+		$likes = new DSB_Likes();
+		$this->loader->add_action( 'wp_ajax_dsb_toggle_like', $likes, 'ajax_toggle_like' );
+		$this->loader->add_action( 'wp_ajax_dsb_get_likes', $likes, 'ajax_get_likes' );
+	}
+
+	/**
+	 * Run the loader to execute all hooks.
+	 */
+	public function run() {
+		$this->loader->run();
+	}
+}
