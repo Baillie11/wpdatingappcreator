@@ -28,6 +28,11 @@ class DSB_Profile_Fields {
 			$fields = array_merge( $fields, self::get_about_fields() );
 		}
 
+		// Partner / dual-profile fields are always defined; the front-end
+		// edit form hides them via JS unless the member picks a couple
+		// option in the "I am / We are" select.
+		$fields = array_merge( $fields, self::get_partner_fields() );
+
 		// Lifestyle fields
 		if ( in_array( 'lifestyle', $enabled_fields ) ) {
 			$fields = array_merge( $fields, self::get_lifestyle_fields() );
@@ -66,6 +71,22 @@ class DSB_Profile_Fields {
 		}
 
 		$fields = array(
+			'profile_kind' => array(
+				'label'       => __( 'I am / We are', 'dating-site-builder' ),
+				'type'        => 'select',
+				'required'    => false,
+				'options'     => array(
+					'male'           => __( 'Male', 'dating-site-builder' ),
+					'female'         => __( 'Female', 'dating-site-builder' ),
+					'couple_mf'      => __( 'Couple (Male & Female)', 'dating-site-builder' ),
+					'couple_ff'      => __( 'Couple (Female & Female)', 'dating-site-builder' ),
+					'couple_mm'      => __( 'Couple (Male & Male)', 'dating-site-builder' ),
+					'group'          => __( 'Group', 'dating-site-builder' ),
+					'gender_diverse' => __( 'Gender Diverse', 'dating-site-builder' ),
+				),
+				'privacy'     => false,
+				'description' => __( 'Are you posting as an individual, couple, or group? Pick a Couple option to unlock the partner profile fields below.', 'dating-site-builder' ),
+			),
 			'gender' => array(
 				'label'       => __( 'Gender', 'dating-site-builder' ),
 				'type'        => 'select',
@@ -150,6 +171,62 @@ class DSB_Profile_Fields {
 				'required'    => false,
 				'maxlength'   => 500,
 				'privacy'     => false,
+			),
+		);
+	}
+
+	/**
+	 * Partner / dual-profile fields.
+	 *
+	 * These are stored alongside the primary member's meta with a
+	 * `partner_` prefix and only rendered when the member's
+	 * `profile_kind` value starts with `couple_` (handled in the
+	 * profile-edit and profile-view templates).
+	 */
+	private static function get_partner_fields() {
+		return array(
+			'partner_display_name' => array(
+				'label'           => __( 'Partner Name', 'dating-site-builder' ),
+				'type'            => 'text',
+				'required'        => false,
+				'maxlength'       => 50,
+				'privacy'         => false,
+				'requires_couple' => true,
+				'description'     => __( 'How your partner is shown on your couple profile.', 'dating-site-builder' ),
+			),
+			'partner_date_of_birth' => array(
+				'label'           => __( 'Partner Date of Birth', 'dating-site-builder' ),
+				'type'            => 'date',
+				'required'        => false,
+				'privacy'         => true,
+				'requires_couple' => true,
+				'description'     => __( 'Used only to display partner\'s age. The exact date stays private.', 'dating-site-builder' ),
+			),
+			'partner_headline' => array(
+				'label'           => __( 'Partner Headline', 'dating-site-builder' ),
+				'type'            => 'text',
+				'required'        => false,
+				'maxlength'       => 100,
+				'privacy'         => false,
+				'requires_couple' => true,
+				'description'     => __( 'A short tagline for your partner (max 100 characters).', 'dating-site-builder' ),
+			),
+			'partner_about' => array(
+				'label'           => __( 'About Partner', 'dating-site-builder' ),
+				'type'            => 'textarea',
+				'required'        => false,
+				'maxlength'       => 500,
+				'privacy'         => false,
+				'requires_couple' => true,
+				'description'     => __( 'Tell others about your partner (max 500 characters).', 'dating-site-builder' ),
+			),
+			'partner_looking_for' => array(
+				'label'           => __( 'What Partner Is Looking For', 'dating-site-builder' ),
+				'type'            => 'textarea',
+				'required'        => false,
+				'maxlength'       => 500,
+				'privacy'         => false,
+				'requires_couple' => true,
 			),
 		);
 	}
