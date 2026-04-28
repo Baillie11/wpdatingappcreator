@@ -61,6 +61,23 @@ class DSB_Core {
 		$this->loader->add_action( 'wp_ajax_dsb_approve_profile', $plugin_admin, 'approve_profile' );
 		$this->loader->add_action( 'wp_ajax_dsb_ban_user', $plugin_admin, 'ban_user' );
 		$this->loader->add_action( 'wp_ajax_dsb_resolve_report', $plugin_admin, 'resolve_report' );
+
+		// Manage dating profile photos from the standard WP user screens.
+		$this->loader->add_action( 'show_user_profile', $plugin_admin, 'render_user_profile_photos' );
+		$this->loader->add_action( 'edit_user_profile', $plugin_admin, 'render_user_profile_photos' );
+		$this->loader->add_action( 'personal_options_update', $plugin_admin, 'save_user_profile_photos' );
+		$this->loader->add_action( 'edit_user_profile_update', $plugin_admin, 'save_user_profile_photos' );
+
+		// Edit / moderate every dating profile field from the WP user screens.
+		$this->loader->add_action( 'show_user_profile', $plugin_admin, 'render_user_profile_fields' );
+		$this->loader->add_action( 'edit_user_profile', $plugin_admin, 'render_user_profile_fields' );
+		$this->loader->add_action( 'personal_options_update', $plugin_admin, 'save_user_profile_fields' );
+		$this->loader->add_action( 'edit_user_profile_update', $plugin_admin, 'save_user_profile_fields' );
+
+		// Remove the built-in Website field to discourage off-site advertising.
+		$this->loader->add_action( 'admin_head-profile.php', $plugin_admin, 'hide_user_website_field' );
+		$this->loader->add_action( 'admin_head-user-edit.php', $plugin_admin, 'hide_user_website_field' );
+		$this->loader->add_action( 'admin_head-user-new.php', $plugin_admin, 'hide_user_website_field' );
 	}
 
 	/**

@@ -317,34 +317,52 @@
 		likes: function() {
 			$(document).on('click', '.dsb-like-btn', function(e) {
 				e.preventDefault();
-				
+
 				const $button = $(this);
 				const userId = $button.data('user-id');
-				
+				const likedHint = 'You\'ve liked this member. Click to remove your like.';
+				const notLikedHint = 'Like this member to let them know you\'re interested. If they like you back it\'s a match!';
+
+				function setLikedState($btn, liked) {
+					const $label = $btn.find('.dsb-btn-label');
+					if (liked) {
+						$btn.addClass('liked');
+						if ($label.length) {
+							$label.text('Liked');
+						} else {
+							$btn.find('span').last().text('Liked');
+						}
+						$btn.attr('title', likedHint).attr('aria-label', likedHint);
+					} else {
+						$btn.removeClass('liked');
+						if ($label.length) {
+							$label.text('Like');
+						} else {
+							$btn.find('span').last().text('Like');
+						}
+						$btn.attr('title', notLikedHint).attr('aria-label', notLikedHint);
+					}
+				}
+
 				// Optimistic UI update
-				$button.toggleClass('liked');
-				
+				const optimisticLiked = !$button.hasClass('liked');
+				setLikedState($button, optimisticLiked);
+
 				$.post(dsbPublic.ajaxurl, {
 					action: 'dsb_toggle_like',
 					nonce: dsbPublic.nonce,
 					user_id: userId
 				}, function(response) {
 					if (response.success) {
-						if (response.data.liked) {
-							$button.addClass('liked');
-							$button.find('span').last().text('Liked');
-						} else {
-							$button.removeClass('liked');
-							$button.find('span').last().text('Like');
-						}
-						
+						setLikedState($button, !!response.data.liked);
+
 						// Show mutual match notification
 						if (response.data.mutual_match) {
 							alert('It\'s a match! You both liked each other!');
 						}
 					} else {
 						// Revert UI update on error
-						$button.toggleClass('liked');
+						setLikedState($button, !optimisticLiked);
 					}
 				});
 			});

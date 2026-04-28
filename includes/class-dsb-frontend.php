@@ -281,7 +281,29 @@ class DSB_Frontend {
 		// so it only affects dating pages).
 		$full_width_css = $this->get_full_width_css();
 
-		wp_add_inline_style( 'dsb-public', $theme_css . $template_css . $full_width_css );
+		// Header logo size variable (Settings > Header Logo Size).
+		$logo_size_css = $this->get_header_logo_size_css();
+
+		wp_add_inline_style( 'dsb-public', $theme_css . $template_css . $full_width_css . $logo_size_css );
+	}
+
+	/**
+	 * Translate the dsb_header_logo_size option into a CSS variable
+	 * the front-end stylesheet can consume.
+	 */
+	private function get_header_logo_size_css() {
+		$size = get_option( 'dsb_header_logo_size', 'full' );
+
+		$map = array(
+			'small'  => '40px',
+			'medium' => '64px',
+			'large'  => '96px',
+			'full'   => '140px',
+		);
+
+		$value = isset( $map[ $size ] ) ? $map[ $size ] : $map['full'];
+
+		return ':root { --dsb-app-logo-height: ' . $value . '; }';
 	}
 
 	/**
@@ -1164,8 +1186,8 @@ class DSB_Frontend {
 						<img class="dsb-app-logo-img" src="<?php echo esc_url( $dsb_logo_url ); ?>" alt="<?php echo esc_attr( $this->get_site_name() ); ?>">
 					<?php else : ?>
 						<span class="dsb-app-logo-icon">💕</span>
+						<span class="dsb-app-logo-text"><?php echo esc_html( $this->get_site_name() ); ?></span>
 					<?php endif; ?>
-					<span><?php echo esc_html( $this->get_site_name() ); ?></span>
 				</a>
 				<nav class="dsb-app-nav">
 					<a href="<?php echo esc_url( get_permalink( get_option( 'dsb_member_directory_page' ) ) ); ?>" class="dsb-app-nav-link <?php echo $active_page === 'browse' ? 'active' : ''; ?>">
@@ -1724,11 +1746,21 @@ class DSB_Frontend {
 			$this->track_profile_view( $user_id, $current_user_id );
 		}
 
-		$fields = DSB_Profile_Fields::get_all_fields();
-		$age = $this->calculate_age( get_user_meta( $user_id, 'dsb_date_of_birth', true ) );
-		$gender = get_user_meta( $user_id, 'dsb_gender', true );
-		$city = get_user_meta( $user_id, 'dsb_city', true );
-		$country = get_user_meta( $user_id, 'dsb_country', true );
+		$fields            = DSB_Profile_Fields::get_all_fields();
+		$age               = $this->calculate_age( get_user_meta( $user_id, 'dsb_date_of_birth', true ) );
+		$gender            = get_user_meta( $user_id, 'dsb_gender', true );
+		$city              = get_user_meta( $user_id, 'dsb_city', true );
+		$state             = get_user_meta( $user_id, 'dsb_state', true );
+		$country           = get_user_meta( $user_id, 'dsb_country', true );
+		$headline          = get_user_meta( $user_id, 'dsb_headline', true );
+		$about_me          = get_user_meta( $user_id, 'dsb_about_me', true );
+		$looking_for_text  = get_user_meta( $user_id, 'dsb_looking_for_text', true );
+
+		// Build the location string from whatever pieces the member has
+		// supplied (city, state/region, country) so visitors can see
+		// roughly where they are without leaking the full address.
+		$location_parts = array_filter( array( $city, $state, $country ), 'strlen' );
+		$location       = implode( ', ', $location_parts );
 
 		// Check if liked
 		$is_liked = false;
@@ -1736,58 +1768,130 @@ class DSB_Frontend {
 			$is_liked = DSB_Likes::has_liked( $current_user_id, $user_id );
 		}
 
+		// Fields that we render in dedicated sections above the generic
+		// details list — skip them when iterating $fields below so they
+		// don't appear twice.
+		$handled_keys = array(
+			'date_of_birth',
+			'headline',
+			'about_me',
+			'looking_for_text',
+			'city',
+			'state',
+			'country',
+		);
+
+		// Pre-compute the remaining detail rows so we can decide whether
+		// to render the "Profile Details" heading at all.
+		$detail_rows = array();
+		foreach ( $fields as $field_key => $field ) {
+			if ( in_array( $field_key, $handled_keys, true ) ) {
+				continue;
+			}
+			$value = get_user_meta( $user_id, 'dsb_' . $field_key, true );
+			if ( '' === $value || null === $value || array() === $value ) {
+				continue;
+			}
+
+			// Translate stored option keys back to their human label
+			// for select / checkbox fields.
+			$display_value = $value;
+			if ( ! empty( $field['options'] ) && is_array( $field['options'] ) ) {
+				if ( is_array( $value ) ) {
+					$labels = array();
+					foreach ( $value as $v ) {
+						$labels[] = isset( $field['options'][ $v ] ) ? $field['options'][ $v ] : $v;
+					}
+					$display_value = implode( ', ', $labels );
+				} else {
+					$display_value = isset( $field['options'][ $value ] ) ? $field['options'][ $value ] : $value;
+				}
+			} elseif ( is_array( $value ) ) {
+				$display_value = implode( ', ', $value );
+			}
+
+			$detail_rows[] = array(
+				'label' => $field['label'],
+				'value' => $display_value,
+			);
+		}
+
+		$has_any_text = ( $headline || $about_me || $looking_for_text || ! empty( $detail_rows ) || $location );
+
 		$this->add_member_page_class();
 
 		ob_start();
 		echo $this->render_app_header( '' );
 		?>
 		<div class="dsb-app-content">
-		<div class="dsb-profile-view-wrapper">
-			<div class="dsb-profile-card">
+		<div class="dsb-profile-view-wrapper dsb-profile-view-narrow">
+			<div class="dsb-profile-card dsb-profile-card-stacked">
 				<div class="dsb-profile-photos">
 					<?php echo $this->render_user_photos( $user_id, false ); ?>
 				</div>
 
 				<div class="dsb-profile-info">
 					<div class="dsb-profile-header">
-						<h2><?php echo esc_html( $user->display_name ); ?>, <?php echo esc_html( $age ); ?></h2>
-						<?php if ( $city || $country ) : ?>
-							<p class="dsb-profile-location">
-								<?php echo esc_html( $city ? $city . ', ' : '' ); ?>
-								<?php echo esc_html( $country ); ?>
-							</p>
+						<h2>
+							<?php echo esc_html( $user->display_name ); ?><?php echo $age ? ', ' . esc_html( $age ) : ''; ?>
+						</h2>
+						<?php if ( $location ) : ?>
+							<p class="dsb-profile-location"><?php echo esc_html( $location ); ?></p>
+						<?php endif; ?>
+						<?php if ( $headline ) : ?>
+							<p class="dsb-profile-headline">“<?php echo esc_html( $headline ); ?>”</p>
 						<?php endif; ?>
 					</div>
 
 					<?php if ( $user_id !== $current_user_id ) : ?>
 					<div class="dsb-profile-actions">
-						<button class="dsb-btn dsb-btn-icon dsb-like-btn <?php echo $is_liked ? 'liked' : ''; ?>" data-user-id="<?php echo esc_attr( $user_id ); ?>">
-							<span class="dsb-icon-heart"></span>
-							<?php echo $is_liked ? __( 'Liked', 'dating-site-builder' ) : __( 'Like', 'dating-site-builder' ); ?>
+						<button class="dsb-btn dsb-btn-secondary dsb-like-btn <?php echo $is_liked ? 'liked' : ''; ?>" data-user-id="<?php echo esc_attr( $user_id ); ?>">
+							<span class="dsb-icon-heart" aria-hidden="true"></span>
+							<span class="dsb-btn-label"><?php echo $is_liked ? esc_html__( 'Liked', 'dating-site-builder' ) : esc_html__( 'Like', 'dating-site-builder' ); ?></span>
 						</button>
-						<a href="#" class="dsb-btn dsb-btn-primary dsb-message-btn" data-user-id="<?php echo esc_attr( $user_id ); ?>">
-							<span class="dsb-icon-message"></span>
-							<?php _e( 'Message', 'dating-site-builder' ); ?>
+						<a href="<?php echo esc_url( add_query_arg( 'conversation', $user_id, get_permalink( get_option( 'dsb_messages_page' ) ) ) ); ?>" class="dsb-btn dsb-btn-primary dsb-message-btn" data-user-id="<?php echo esc_attr( $user_id ); ?>">
+							<span class="dsb-icon-message" aria-hidden="true"></span>
+							<span class="dsb-btn-label"><?php esc_html_e( 'Message', 'dating-site-builder' ); ?></span>
 						</a>
 						<button class="dsb-btn dsb-btn-text dsb-report-btn" data-user-id="<?php echo esc_attr( $user_id ); ?>">
-							<?php _e( 'Report', 'dating-site-builder' ); ?>
+							<?php esc_html_e( 'Report', 'dating-site-builder' ); ?>
 						</button>
 					</div>
 					<?php endif; ?>
 
-					<div class="dsb-profile-details">
-						<?php foreach ( $fields as $field_key => $field ) :
-							$value = get_user_meta( $user_id, 'dsb_' . $field_key, true );
-							if ( empty( $value ) || in_array( $field_key, array( 'date_of_birth' ) ) ) {
-								continue;
-							}
-							?>
-							<div class="dsb-profile-field">
-								<strong><?php echo esc_html( $field['label'] ); ?>:</strong>
-								<span><?php echo esc_html( is_array( $value ) ? implode( ', ', $value ) : $value ); ?></span>
+					<?php if ( $about_me ) : ?>
+						<section class="dsb-profile-section">
+							<h3><?php esc_html_e( 'About Me', 'dating-site-builder' ); ?></h3>
+							<p class="dsb-profile-bio"><?php echo nl2br( esc_html( $about_me ) ); ?></p>
+						</section>
+					<?php endif; ?>
+
+					<?php if ( $looking_for_text ) : ?>
+						<section class="dsb-profile-section">
+							<h3><?php esc_html_e( 'What I\'m Looking For', 'dating-site-builder' ); ?></h3>
+							<p class="dsb-profile-bio"><?php echo nl2br( esc_html( $looking_for_text ) ); ?></p>
+						</section>
+					<?php endif; ?>
+
+					<?php if ( ! empty( $detail_rows ) ) : ?>
+						<section class="dsb-profile-section">
+							<h3><?php esc_html_e( 'Profile Details', 'dating-site-builder' ); ?></h3>
+							<div class="dsb-profile-details">
+								<?php foreach ( $detail_rows as $row ) : ?>
+									<div class="dsb-profile-field">
+										<strong><?php echo esc_html( $row['label'] ); ?>:</strong>
+										<span><?php echo esc_html( $row['value'] ); ?></span>
+									</div>
+								<?php endforeach; ?>
 							</div>
-						<?php endforeach; ?>
-					</div>
+						</section>
+					<?php endif; ?>
+
+					<?php if ( ! $has_any_text ) : ?>
+						<p class="dsb-profile-empty">
+							<?php esc_html_e( 'This member hasn\'t added any profile details yet.', 'dating-site-builder' ); ?>
+						</p>
+					<?php endif; ?>
 				</div>
 			</div>
 		</div>
@@ -2073,13 +2177,27 @@ class DSB_Frontend {
 				<?php endif; ?>
 			</div>
 			
+			<?php
+			$profile_url = add_query_arg( 'profile_user', $user_id, get_permalink( get_option( 'dsb_profile_view_page' ) ) );
+			$message_url = add_query_arg( 'conversation', $user_id, get_permalink( get_option( 'dsb_messages_page' ) ) );
+			$like_hint = $is_liked
+				? __( 'You\'ve liked this member. Click to remove your like.', 'dating-site-builder' )
+				: __( 'Like this member to let them know you\'re interested. If they like you back it\'s a match!', 'dating-site-builder' );
+			?>
 			<div class="dsb-member-actions">
-				<button class="dsb-btn dsb-btn-icon dsb-like-btn <?php echo $is_liked ? 'liked' : ''; ?>" data-user-id="<?php echo esc_attr( $user_id ); ?>">
-					<span class="dsb-icon-heart"></span>
-				</button>
-				<a href="<?php echo esc_url( add_query_arg( 'conversation', $user_id, get_permalink( get_option( 'dsb_messages_page' ) ) ) ); ?>" class="dsb-btn dsb-btn-icon">
-					<span class="dsb-icon-message"></span>
+				<a href="<?php echo esc_url( $profile_url ); ?>" class="dsb-btn dsb-btn-primary dsb-view-profile-btn">
+					<?php esc_html_e( 'View Profile', 'dating-site-builder' ); ?>
 				</a>
+				<div class="dsb-member-actions-row">
+					<button type="button" class="dsb-btn dsb-btn-secondary dsb-like-btn <?php echo $is_liked ? 'liked' : ''; ?>" data-user-id="<?php echo esc_attr( $user_id ); ?>" title="<?php echo esc_attr( $like_hint ); ?>" aria-label="<?php echo esc_attr( $like_hint ); ?>">
+						<span class="dsb-icon-heart" aria-hidden="true"></span>
+						<span class="dsb-btn-label"><?php echo $is_liked ? esc_html__( 'Liked', 'dating-site-builder' ) : esc_html__( 'Like', 'dating-site-builder' ); ?></span>
+					</button>
+					<a href="<?php echo esc_url( $message_url ); ?>" class="dsb-btn dsb-btn-secondary dsb-message-btn" title="<?php esc_attr_e( 'Send this member a private message', 'dating-site-builder' ); ?>" aria-label="<?php esc_attr_e( 'Send this member a private message', 'dating-site-builder' ); ?>">
+						<span class="dsb-icon-message" aria-hidden="true"></span>
+						<span class="dsb-btn-label"><?php esc_html_e( 'Message', 'dating-site-builder' ); ?></span>
+					</a>
+				</div>
 			</div>
 		</div>
 		<?php

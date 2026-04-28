@@ -1584,66 +1584,184 @@ class DSB_Admin {
 	}
 
 	/**
+	 * Persist all settings posted from the Settings page.
+	 *
+	 * Mirrors the wizard's save_wizard_data() coverage so an admin
+	 * can change every wizard option here without ever needing to
+	 * re-run the wizard. Unlike the wizard (which only updates
+	 * fields present in $_POST so step navigation does not wipe
+	 * skipped fields), this routine treats unchecked checkboxes as
+	 * false and missing array fields as empty arrays so the
+	 * Settings UI is the single source of truth.
+	 */
+	private function save_settings_data() {
+		// Plain text / int / string options.
+		$text_options = array(
+			'dsb_site_name'           => 'sanitize_text_field',
+			'dsb_color_theme'         => 'sanitize_text_field',
+			'dsb_template_style'      => 'sanitize_text_field',
+			'dsb_site_type'           => 'sanitize_text_field',
+			'dsb_default_country'     => 'sanitize_text_field',
+			'dsb_photo_privacy_mode'  => 'sanitize_text_field',
+			'dsb_adult_age_gate_mode' => 'sanitize_text_field',
+			'dsb_matching_mode'       => 'sanitize_text_field',
+			'dsb_header_logo_size'    => 'sanitize_text_field',
+		);
+		foreach ( $text_options as $opt => $sanitizer ) {
+			if ( isset( $_POST[ $opt ] ) ) {
+				update_option( $opt, call_user_func( $sanitizer, wp_unslash( $_POST[ $opt ] ) ) );
+			}
+		}
+
+		$int_options = array(
+			'dsb_minimum_age' => 18,
+			'dsb_max_photos'  => 10,
+			'dsb_site_logo'   => 0,
+		);
+		foreach ( $int_options as $opt => $default ) {
+			if ( isset( $_POST[ $opt ] ) ) {
+				update_option( $opt, intval( $_POST[ $opt ] ) );
+			}
+		}
+
+		// Checkbox options - unchecked boxes are not posted, so we
+		// explicitly write false to keep them in sync.
+		$bool_options = array(
+			'dsb_require_email_verification',
+			'dsb_require_profile_approval',
+			'dsb_allow_custom_gender',
+			'dsb_allow_multiple_interests',
+			'dsb_enable_private_photos',
+			'dsb_enable_messaging',
+			'dsb_enable_likes',
+			'dsb_require_mutual_like',
+			'dsb_enable_blocking',
+			'dsb_enable_reporting',
+			'dsb_membership_enabled',
+		);
+		foreach ( $bool_options as $opt ) {
+			update_option( $opt, ! empty( $_POST[ $opt ] ) );
+		}
+
+		// Multi-value (checkbox group) options.
+		$array_options = array(
+			'dsb_enabled_field_groups',
+			'dsb_accessibility_fields',
+		);
+		foreach ( $array_options as $opt ) {
+			$value = isset( $_POST[ $opt ] ) && is_array( $_POST[ $opt ] )
+				? array_map( 'sanitize_text_field', wp_unslash( $_POST[ $opt ] ) )
+				: array();
+			update_option( $opt, $value );
+		}
+
+		// Apply the chosen Site Logo as the WordPress Site Icon, the
+		// same way the wizard does on completion. No-op when the
+		// admin has not picked a logo.
+		$this->apply_site_logo_as_site_icon();
+	}
+
+	/**
 	 * Render settings page.
+	 *
+	 * Exposes every option configured by the Setup Wizard so admins
+	 * can edit them without re-running the wizard.
 	 */
 	public function render_settings() {
 		// Save settings
 		if ( isset( $_POST['dsb_save_settings'] ) ) {
 			check_admin_referer( 'dsb_settings', 'dsb_settings_nonce' );
-
-			// General settings
-			update_option( 'dsb_site_name', sanitize_text_field( $_POST['dsb_site_name'] ?? '' ) );
-			update_option( 'dsb_color_theme', sanitize_text_field( $_POST['dsb_color_theme'] ?? 'romantic_red' ) );
-			update_option( 'dsb_minimum_age', intval( $_POST['dsb_minimum_age'] ?? 18 ) );
-			update_option( 'dsb_default_country', sanitize_text_field( $_POST['dsb_default_country'] ?? '' ) );
-
-			// Registration settings
-			update_option( 'dsb_require_email_verification', isset( $_POST['dsb_require_email_verification'] ) );
-			update_option( 'dsb_require_profile_approval', isset( $_POST['dsb_require_profile_approval'] ) );
-
-			// Features
-			update_option( 'dsb_enable_messaging', isset( $_POST['dsb_enable_messaging'] ) );
-			update_option( 'dsb_enable_likes', isset( $_POST['dsb_enable_likes'] ) );
-			update_option( 'dsb_require_mutual_like', isset( $_POST['dsb_require_mutual_like'] ) );
-			update_option( 'dsb_enable_blocking', isset( $_POST['dsb_enable_blocking'] ) );
-			update_option( 'dsb_enable_reporting', isset( $_POST['dsb_enable_reporting'] ) );
-
-			// Photo settings
-			update_option( 'dsb_max_photos', intval( $_POST['dsb_max_photos'] ?? 6 ) );
-			update_option( 'dsb_enable_private_photos', isset( $_POST['dsb_enable_private_photos'] ) );
-
+			$this->save_settings_data();
 			echo '<div class="notice notice-success"><p>' . esc_html__( 'Settings saved.', 'dating-site-builder' ) . '</p></div>';
 		}
 
-		// Get current values
-		$site_name = get_option( 'dsb_site_name', '' );
-		$color_theme = get_option( 'dsb_color_theme', 'romantic_red' );
-		$minimum_age = get_option( 'dsb_minimum_age', 18 );
-		$default_country = get_option( 'dsb_default_country', '' );
-		$require_email = get_option( 'dsb_require_email_verification', false );
-		$require_approval = get_option( 'dsb_require_profile_approval', false );
-		$enable_messaging = get_option( 'dsb_enable_messaging', true );
-		$enable_likes = get_option( 'dsb_enable_likes', true );
-		$require_mutual = get_option( 'dsb_require_mutual_like', false );
-		$enable_blocking = get_option( 'dsb_enable_blocking', true );
-		$enable_reporting = get_option( 'dsb_enable_reporting', true );
-		$max_photos = get_option( 'dsb_max_photos', 6 );
-		$enable_private = get_option( 'dsb_enable_private_photos', false );
+		// Get current values - defaults match the wizard step renderers.
+		$site_name              = get_option( 'dsb_site_name', '' );
+		$site_logo_id           = (int) get_option( 'dsb_site_logo', 0 );
+		$site_logo_url          = $site_logo_id ? wp_get_attachment_image_url( $site_logo_id, 'medium' ) : '';
+		$header_logo_size       = get_option( 'dsb_header_logo_size', 'full' );
+		$valid_logo_sizes       = array( 'small', 'medium', 'large', 'full' );
+		if ( ! in_array( $header_logo_size, $valid_logo_sizes, true ) ) {
+			$header_logo_size = 'full';
+		}
+		$color_theme            = get_option( 'dsb_color_theme', 'romantic_red' );
+		$template_style         = get_option( 'dsb_template_style', 'modern' );
+		$site_type              = get_option( 'dsb_site_type', 'standard' );
+		$minimum_age            = get_option( 'dsb_minimum_age', 18 );
+		$default_country        = get_option( 'dsb_default_country', '' );
+		$require_email          = get_option( 'dsb_require_email_verification', false );
+		$require_approval       = get_option( 'dsb_require_profile_approval', false );
+		$enabled_groups         = get_option( 'dsb_enabled_field_groups', array( 'basics', 'about' ) );
+		if ( ! is_array( $enabled_groups ) ) {
+			$enabled_groups = array();
+		}
+		$allow_custom_gender    = get_option( 'dsb_allow_custom_gender', true );
+		$allow_multi_interests  = get_option( 'dsb_allow_multiple_interests', true );
+		$accessibility_fields   = get_option( 'dsb_accessibility_fields', array() );
+		if ( ! is_array( $accessibility_fields ) ) {
+			$accessibility_fields = array();
+		}
+		$max_photos             = get_option( 'dsb_max_photos', 10 );
+		$photo_privacy          = get_option( 'dsb_photo_privacy_mode', 'public' );
+		$enable_private         = get_option( 'dsb_enable_private_photos', false );
+		$age_gate_mode          = get_option( 'dsb_adult_age_gate_mode', 'checkbox' );
+		$matching_mode          = get_option( 'dsb_matching_mode', 'hybrid' );
+		$enable_messaging       = get_option( 'dsb_enable_messaging', true );
+		$enable_likes           = get_option( 'dsb_enable_likes', true );
+		$require_mutual         = get_option( 'dsb_require_mutual_like', false );
+		$enable_blocking        = get_option( 'dsb_enable_blocking', true );
+		$enable_reporting       = get_option( 'dsb_enable_reporting', true );
+		$membership_enabled     = (bool) get_option( 'dsb_membership_enabled', false );
 		?>
 		<div class="wrap">
 			<h1><?php esc_html_e( 'Dating Site Settings', 'dating-site-builder' ); ?></h1>
+			<p class="description">
+				<?php esc_html_e( 'Every option configured by the Setup Wizard is also available here, so you can fine-tune your dating site without re-running the wizard.', 'dating-site-builder' ); ?>
+			</p>
 
 			<form method="post">
 				<?php wp_nonce_field( 'dsb_settings', 'dsb_settings_nonce' ); ?>
 
 				<div class="dsb-settings-section">
-					<h2><?php esc_html_e( 'General Settings', 'dating-site-builder' ); ?></h2>
+					<h2><?php esc_html_e( 'Site Identity & Theme', 'dating-site-builder' ); ?></h2>
 					<table class="form-table">
 						<tr>
 							<th scope="row"><label for="dsb_site_name"><?php esc_html_e( 'Site Name', 'dating-site-builder' ); ?></label></th>
 							<td>
-								<input type="text" name="dsb_site_name" id="dsb_site_name" value="<?php echo esc_attr( $site_name ); ?>" class="regular-text">
-								<p class="description"><?php esc_html_e( 'The name of your dating site.', 'dating-site-builder' ); ?></p>
+								<input type="text" name="dsb_site_name" id="dsb_site_name" value="<?php echo esc_attr( $site_name ); ?>" class="regular-text" placeholder="<?php esc_attr_e( 'e.g., Cupid, LoveMatch, DateNight', 'dating-site-builder' ); ?>">
+								<p class="description"><?php esc_html_e( 'Used in the admin menu (e.g., "Cupid Settings") and on the front-end branding.', 'dating-site-builder' ); ?></p>
+							</td>
+						</tr>
+						<tr>
+							<th scope="row"><label for="dsb_site_logo"><?php esc_html_e( 'Site Logo', 'dating-site-builder' ); ?></label></th>
+							<td>
+								<div class="dsb-logo-uploader">
+									<input type="hidden" id="dsb_site_logo" name="dsb_site_logo" value="<?php echo esc_attr( $site_logo_id ); ?>">
+									<div class="dsb-logo-preview" id="dsb-logo-preview" style="<?php echo $site_logo_url ? '' : 'display:none;'; ?>">
+										<?php if ( $site_logo_url ) : ?>
+											<img src="<?php echo esc_url( $site_logo_url ); ?>" alt="<?php esc_attr_e( 'Site logo preview', 'dating-site-builder' ); ?>" style="max-width:200px;max-height:200px;display:block;margin-bottom:8px;">
+										<?php endif; ?>
+									</div>
+									<button type="button" class="button" id="dsb-logo-upload-btn">
+										<?php echo $site_logo_id ? esc_html__( 'Change Logo', 'dating-site-builder' ) : esc_html__( 'Choose / Upload Logo', 'dating-site-builder' ); ?>
+									</button>
+									<button type="button" class="button-link dsb-logo-remove-btn" id="dsb-logo-remove-btn" style="<?php echo $site_logo_id ? '' : 'display:none;'; ?>;color:#b32d2e;margin-left:8px;">
+										<?php esc_html_e( 'Remove', 'dating-site-builder' ); ?>
+									</button>
+								</div>
+								<p class="description"><?php esc_html_e( 'Used in the plugin\'s top navigation bar and as the WordPress Site Icon (browser tab favicon, mobile bookmarks, etc.). Saving these settings will also update the Site Icon.', 'dating-site-builder' ); ?></p>
+							</td>
+						</tr>
+						<tr>
+							<th scope="row"><label for="dsb_header_logo_size"><?php esc_html_e( 'Header Logo Size', 'dating-site-builder' ); ?></label></th>
+							<td>
+								<select name="dsb_header_logo_size" id="dsb_header_logo_size">
+									<option value="small" <?php selected( $header_logo_size, 'small' ); ?>><?php esc_html_e( 'Small (40px)', 'dating-site-builder' ); ?></option>
+									<option value="medium" <?php selected( $header_logo_size, 'medium' ); ?>><?php esc_html_e( 'Medium (64px)', 'dating-site-builder' ); ?></option>
+									<option value="large" <?php selected( $header_logo_size, 'large' ); ?>><?php esc_html_e( 'Large (96px)', 'dating-site-builder' ); ?></option>
+									<option value="full" <?php selected( $header_logo_size, 'full' ); ?>><?php esc_html_e( 'Full (140px - native aspect ratio)', 'dating-site-builder' ); ?></option>
+								</select>
+								<p class="description"><?php esc_html_e( 'Controls how tall the logo image renders in the member-area top bar. "Full" uses the largest size that still fits the header.', 'dating-site-builder' ); ?></p>
 							</td>
 						</tr>
 						<tr>
@@ -1660,9 +1778,40 @@ class DSB_Admin {
 							</td>
 						</tr>
 						<tr>
+							<th scope="row"><label for="dsb_template_style"><?php esc_html_e( 'Template Style', 'dating-site-builder' ); ?></label></th>
+							<td>
+								<select name="dsb_template_style" id="dsb_template_style">
+									<option value="modern" <?php selected( $template_style, 'modern' ); ?>><?php esc_html_e( 'Modern - gradients & cards', 'dating-site-builder' ); ?></option>
+									<option value="glassmorphism" <?php selected( $template_style, 'glassmorphism' ); ?>><?php esc_html_e( 'Glassmorphism - frosted glass', 'dating-site-builder' ); ?></option>
+									<option value="minimalist" <?php selected( $template_style, 'minimalist' ); ?>><?php esc_html_e( 'Minimalist - clean & flat', 'dating-site-builder' ); ?></option>
+									<option value="bold_dark" <?php selected( $template_style, 'bold_dark' ); ?>><?php esc_html_e( 'Bold Dark - dark mode', 'dating-site-builder' ); ?></option>
+								</select>
+								<p class="description"><?php esc_html_e( 'Overall layout / visual treatment for member-facing pages.', 'dating-site-builder' ); ?></p>
+							</td>
+						</tr>
+						<tr>
+							<th scope="row"><label for="dsb_site_type"><?php esc_html_e( 'Site Type', 'dating-site-builder' ); ?></label></th>
+							<td>
+								<select name="dsb_site_type" id="dsb_site_type">
+									<option value="standard" <?php selected( $site_type, 'standard' ); ?>><?php esc_html_e( 'Standard Dating Site', 'dating-site-builder' ); ?></option>
+									<option value="adult" <?php selected( $site_type, 'adult' ); ?>><?php esc_html_e( 'Adult Dating Site (18+ only)', 'dating-site-builder' ); ?></option>
+									<option value="swingers" <?php selected( $site_type, 'swingers' ); ?>><?php esc_html_e( 'Swingers / Alternative Lifestyle', 'dating-site-builder' ); ?></option>
+									<option value="ndis" <?php selected( $site_type, 'ndis' ); ?>><?php esc_html_e( 'All Abilities / NDIS-Focused', 'dating-site-builder' ); ?></option>
+									<option value="custom" <?php selected( $site_type, 'custom' ); ?>><?php esc_html_e( 'Custom', 'dating-site-builder' ); ?></option>
+								</select>
+							</td>
+						</tr>
+					</table>
+				</div>
+
+				<div class="dsb-settings-section">
+					<h2><?php esc_html_e( 'Basic Settings', 'dating-site-builder' ); ?></h2>
+					<table class="form-table">
+						<tr>
 							<th scope="row"><label for="dsb_minimum_age"><?php esc_html_e( 'Minimum Age', 'dating-site-builder' ); ?></label></th>
 							<td>
-								<input type="number" name="dsb_minimum_age" id="dsb_minimum_age" value="<?php echo esc_attr( $minimum_age ); ?>" min="18" max="99" class="small-text">
+								<input type="number" name="dsb_minimum_age" id="dsb_minimum_age" value="<?php echo esc_attr( $minimum_age ); ?>" min="13" max="99" class="small-text">
+								<p class="description"><?php esc_html_e( 'Minimum age required to register (default: 18).', 'dating-site-builder' ); ?></p>
 							</td>
 						</tr>
 						<tr>
@@ -1671,18 +1820,12 @@ class DSB_Admin {
 								<input type="text" name="dsb_default_country" id="dsb_default_country" value="<?php echo esc_attr( $default_country ); ?>" class="regular-text" placeholder="<?php esc_attr_e( 'e.g., Australia', 'dating-site-builder' ); ?>">
 							</td>
 						</tr>
-					</table>
-				</div>
-
-				<div class="dsb-settings-section">
-					<h2><?php esc_html_e( 'Registration & Moderation', 'dating-site-builder' ); ?></h2>
-					<table class="form-table">
 						<tr>
 							<th scope="row"><?php esc_html_e( 'Email Verification', 'dating-site-builder' ); ?></th>
 							<td>
 								<label>
-									<input type="checkbox" name="dsb_require_email_verification" <?php checked( $require_email ); ?>>
-									<?php esc_html_e( 'Require email verification before users can browse members', 'dating-site-builder' ); ?>
+									<input type="checkbox" name="dsb_require_email_verification" value="1" <?php checked( $require_email, true ); ?>>
+									<?php esc_html_e( 'Require email verification for new users', 'dating-site-builder' ); ?>
 								</label>
 							</td>
 						</tr>
@@ -1690,8 +1833,8 @@ class DSB_Admin {
 							<th scope="row"><?php esc_html_e( 'Profile Approval', 'dating-site-builder' ); ?></th>
 							<td>
 								<label>
-									<input type="checkbox" name="dsb_require_profile_approval" <?php checked( $require_approval ); ?>>
-									<?php esc_html_e( 'Require admin approval before profiles are visible to other members', 'dating-site-builder' ); ?>
+									<input type="checkbox" name="dsb_require_profile_approval" value="1" <?php checked( $require_approval, true ); ?>>
+									<?php esc_html_e( 'Require admin approval before profiles go public', 'dating-site-builder' ); ?>
 								</label>
 							</td>
 						</tr>
@@ -1699,14 +1842,197 @@ class DSB_Admin {
 				</div>
 
 				<div class="dsb-settings-section">
-					<h2><?php esc_html_e( 'Features', 'dating-site-builder' ); ?></h2>
+					<h2><?php esc_html_e( 'Profile Fields', 'dating-site-builder' ); ?></h2>
 					<table class="form-table">
 						<tr>
-							<th scope="row"><?php esc_html_e( 'Messaging', 'dating-site-builder' ); ?></th>
+							<th scope="row"><?php esc_html_e( 'Field Groups', 'dating-site-builder' ); ?></th>
+							<td>
+								<fieldset>
+									<label>
+										<input type="checkbox" name="dsb_enabled_field_groups[]" value="basics" <?php checked( in_array( 'basics', $enabled_groups, true ) ); ?>>
+										<?php esc_html_e( 'Basics (gender, age, orientation, location, relationship status)', 'dating-site-builder' ); ?>
+									</label><br>
+									<label>
+										<input type="checkbox" name="dsb_enabled_field_groups[]" value="about" <?php checked( in_array( 'about', $enabled_groups, true ) ); ?>>
+										<?php esc_html_e( 'About Me (headline, bio, what I\'m looking for)', 'dating-site-builder' ); ?>
+									</label><br>
+									<label>
+										<input type="checkbox" name="dsb_enabled_field_groups[]" value="lifestyle" <?php checked( in_array( 'lifestyle', $enabled_groups, true ) ); ?>>
+										<?php esc_html_e( 'Lifestyle & Interests (hobbies, occupation, education, smoking, drinking)', 'dating-site-builder' ); ?>
+									</label><br>
+									<label>
+										<input type="checkbox" name="dsb_enabled_field_groups[]" value="accessibility" <?php checked( in_array( 'accessibility', $enabled_groups, true ) ); ?>>
+										<?php esc_html_e( 'Accessibility & Support Needs (recommended for All Abilities mode)', 'dating-site-builder' ); ?>
+									</label><br>
+									<label>
+										<input type="checkbox" name="dsb_enabled_field_groups[]" value="adult_preferences" <?php checked( in_array( 'adult_preferences', $enabled_groups, true ) ); ?>>
+										<?php esc_html_e( 'Adult Preferences (for Adult/Swingers sites)', 'dating-site-builder' ); ?>
+									</label>
+								</fieldset>
+							</td>
+						</tr>
+						<tr>
+							<th scope="row"><?php esc_html_e( 'Gender Options', 'dating-site-builder' ); ?></th>
 							<td>
 								<label>
-									<input type="checkbox" name="dsb_enable_messaging" <?php checked( $enable_messaging ); ?>>
-									<?php esc_html_e( 'Enable private messaging between members', 'dating-site-builder' ); ?>
+									<input type="checkbox" name="dsb_allow_custom_gender" value="1" <?php checked( $allow_custom_gender, true ); ?>>
+									<?php esc_html_e( 'Allow users to specify gender beyond male/female (non-binary, custom, prefer not to say)', 'dating-site-builder' ); ?>
+								</label>
+							</td>
+						</tr>
+						<tr>
+							<th scope="row"><?php esc_html_e( 'Gender Interests', 'dating-site-builder' ); ?></th>
+							<td>
+								<label>
+									<input type="checkbox" name="dsb_allow_multiple_interests" value="1" <?php checked( $allow_multi_interests, true ); ?>>
+									<?php esc_html_e( 'Allow users to select multiple gender interests (who they are interested in)', 'dating-site-builder' ); ?>
+								</label>
+							</td>
+						</tr>
+						<tr id="dsb_settings_accessibility_fields" style="<?php echo in_array( 'accessibility', $enabled_groups, true ) ? '' : 'display:none;'; ?>">
+							<th scope="row"><?php esc_html_e( 'Accessibility Fields', 'dating-site-builder' ); ?></th>
+							<td>
+								<fieldset>
+									<label>
+										<input type="checkbox" name="dsb_accessibility_fields[]" value="communication_preference" <?php checked( in_array( 'communication_preference', $accessibility_fields, true ) ); ?>>
+										<?php esc_html_e( 'Communication Preferences', 'dating-site-builder' ); ?>
+									</label><br>
+									<label>
+										<input type="checkbox" name="dsb_accessibility_fields[]" value="mobility_info" <?php checked( in_array( 'mobility_info', $accessibility_fields, true ) ); ?>>
+										<?php esc_html_e( 'Mobility Information', 'dating-site-builder' ); ?>
+									</label><br>
+									<label>
+										<input type="checkbox" name="dsb_accessibility_fields[]" value="sensory_preferences" <?php checked( in_array( 'sensory_preferences', $accessibility_fields, true ) ); ?>>
+										<?php esc_html_e( 'Sensory Preferences', 'dating-site-builder' ); ?>
+									</label><br>
+									<label>
+										<input type="checkbox" name="dsb_accessibility_fields[]" value="support_needs" <?php checked( in_array( 'support_needs', $accessibility_fields, true ) ); ?>>
+										<?php esc_html_e( 'Support Needs', 'dating-site-builder' ); ?>
+									</label><br>
+									<label>
+										<input type="checkbox" name="dsb_accessibility_fields[]" value="ndis_participant" <?php checked( in_array( 'ndis_participant', $accessibility_fields, true ) ); ?>>
+										<?php esc_html_e( 'NDIS Participant', 'dating-site-builder' ); ?>
+									</label>
+								</fieldset>
+							</td>
+						</tr>
+						<tr>
+							<th scope="row"><label for="dsb_max_photos"><?php esc_html_e( 'Maximum Photos', 'dating-site-builder' ); ?></label></th>
+							<td>
+								<input type="number" name="dsb_max_photos" id="dsb_max_photos" value="<?php echo esc_attr( $max_photos ); ?>" min="1" max="50" class="small-text">
+								<p class="description"><?php esc_html_e( 'Maximum number of photos per member profile.', 'dating-site-builder' ); ?></p>
+							</td>
+						</tr>
+					</table>
+					<script>
+					jQuery(document).ready(function($){
+						function toggleSettingsAccessibility(){
+							var checked = $('input[name="dsb_enabled_field_groups[]"][value="accessibility"]').is(':checked');
+							$('#dsb_settings_accessibility_fields').toggle(checked);
+						}
+						toggleSettingsAccessibility();
+						$('input[name="dsb_enabled_field_groups[]"]').on('change', toggleSettingsAccessibility);
+					});
+					</script>
+				</div>
+
+				<div class="dsb-settings-section">
+					<h2><?php esc_html_e( 'Photo Privacy & Age Verification', 'dating-site-builder' ); ?></h2>
+					<table class="form-table">
+						<tr>
+							<th scope="row"><?php esc_html_e( 'Photo Privacy Mode', 'dating-site-builder' ); ?></th>
+							<td>
+								<fieldset>
+									<label>
+										<input type="radio" name="dsb_photo_privacy_mode" value="public" <?php checked( $photo_privacy, 'public' ); ?>>
+										<strong><?php esc_html_e( 'Public Photos', 'dating-site-builder' ); ?></strong> &mdash;
+										<span class="description"><?php esc_html_e( 'All profile photos are visible to all members.', 'dating-site-builder' ); ?></span>
+									</label><br>
+									<label>
+										<input type="radio" name="dsb_photo_privacy_mode" value="blur_until_match" <?php checked( $photo_privacy, 'blur_until_match' ); ?>>
+										<strong><?php esc_html_e( 'Blur Until Match', 'dating-site-builder' ); ?></strong> &mdash;
+										<span class="description"><?php esc_html_e( 'Photos are blurred until users match (recommended for adult sites).', 'dating-site-builder' ); ?></span>
+									</label><br>
+									<label>
+										<input type="radio" name="dsb_photo_privacy_mode" value="private" <?php checked( $photo_privacy, 'private' ); ?>>
+										<strong><?php esc_html_e( 'Members Only', 'dating-site-builder' ); ?></strong> &mdash;
+										<span class="description"><?php esc_html_e( 'Photos only visible to logged-in members.', 'dating-site-builder' ); ?></span>
+									</label>
+								</fieldset>
+							</td>
+						</tr>
+						<tr>
+							<th scope="row"><?php esc_html_e( 'Public & Private Albums', 'dating-site-builder' ); ?></th>
+							<td>
+								<label>
+									<input type="checkbox" name="dsb_enable_private_photos" value="1" <?php checked( $enable_private, true ); ?>>
+									<?php esc_html_e( 'Allow members to mark photos as private (requires approval to view)', 'dating-site-builder' ); ?>
+								</label>
+							</td>
+						</tr>
+						<tr>
+							<th scope="row"><?php esc_html_e( 'Age Verification', 'dating-site-builder' ); ?></th>
+							<td>
+								<fieldset>
+									<label>
+										<input type="radio" name="dsb_adult_age_gate_mode" value="none" <?php checked( $age_gate_mode, 'none' ); ?>>
+										<strong><?php esc_html_e( 'None', 'dating-site-builder' ); ?></strong>
+									</label><br>
+									<label>
+										<input type="radio" name="dsb_adult_age_gate_mode" value="checkbox" <?php checked( $age_gate_mode, 'checkbox' ); ?>>
+										<strong><?php esc_html_e( 'Checkbox on Registration', 'dating-site-builder' ); ?></strong>
+									</label><br>
+									<label>
+										<input type="radio" name="dsb_adult_age_gate_mode" value="warning_page" <?php checked( $age_gate_mode, 'warning_page' ); ?>>
+										<strong><?php esc_html_e( 'Warning Page', 'dating-site-builder' ); ?></strong>
+									</label><br>
+									<label>
+										<input type="radio" name="dsb_adult_age_gate_mode" value="both" <?php checked( $age_gate_mode, 'both' ); ?>>
+										<strong><?php esc_html_e( 'Both (warning page + checkbox)', 'dating-site-builder' ); ?></strong>
+									</label>
+								</fieldset>
+							</td>
+						</tr>
+					</table>
+				</div>
+
+				<div class="dsb-settings-section">
+					<h2><?php esc_html_e( 'Matching & Discovery', 'dating-site-builder' ); ?></h2>
+					<table class="form-table">
+						<tr>
+							<th scope="row"><?php esc_html_e( 'Matching Algorithm', 'dating-site-builder' ); ?></th>
+							<td>
+								<fieldset>
+									<label>
+										<input type="radio" name="dsb_matching_mode" value="simple" <?php checked( $matching_mode, 'simple' ); ?>>
+										<strong><?php esc_html_e( 'Simple Preferences', 'dating-site-builder' ); ?></strong> &mdash;
+										<span class="description"><?php esc_html_e( 'Match based on gender, age range, and location only.', 'dating-site-builder' ); ?></span>
+									</label><br>
+									<label>
+										<input type="radio" name="dsb_matching_mode" value="interests" <?php checked( $matching_mode, 'interests' ); ?>>
+										<strong><?php esc_html_e( 'Interests-Based', 'dating-site-builder' ); ?></strong> &mdash;
+										<span class="description"><?php esc_html_e( 'Score matches based on shared interests and hobbies.', 'dating-site-builder' ); ?></span>
+									</label><br>
+									<label>
+										<input type="radio" name="dsb_matching_mode" value="hybrid" <?php checked( $matching_mode, 'hybrid' ); ?>>
+										<strong><?php esc_html_e( 'Hybrid (Recommended)', 'dating-site-builder' ); ?></strong> &mdash;
+										<span class="description"><?php esc_html_e( 'Combine preferences, interests, and activity for best matches.', 'dating-site-builder' ); ?></span>
+									</label>
+								</fieldset>
+							</td>
+						</tr>
+					</table>
+				</div>
+
+				<div class="dsb-settings-section">
+					<h2><?php esc_html_e( 'Messaging & Interaction', 'dating-site-builder' ); ?></h2>
+					<table class="form-table">
+						<tr>
+							<th scope="row"><?php esc_html_e( 'Private Messaging', 'dating-site-builder' ); ?></th>
+							<td>
+								<label>
+									<input type="checkbox" name="dsb_enable_messaging" value="1" <?php checked( $enable_messaging, true ); ?>>
+									<?php esc_html_e( 'Enable private 1-to-1 messaging', 'dating-site-builder' ); ?>
 								</label>
 							</td>
 						</tr>
@@ -1714,13 +2040,13 @@ class DSB_Admin {
 							<th scope="row"><?php esc_html_e( 'Likes System', 'dating-site-builder' ); ?></th>
 							<td>
 								<label>
-									<input type="checkbox" name="dsb_enable_likes" <?php checked( $enable_likes ); ?>>
-									<?php esc_html_e( 'Enable likes and favorites', 'dating-site-builder' ); ?>
+									<input type="checkbox" name="dsb_enable_likes" value="1" <?php checked( $enable_likes, true ); ?>>
+									<?php esc_html_e( 'Enable like/favorite system', 'dating-site-builder' ); ?>
 								</label>
 								<br><br>
 								<label>
-									<input type="checkbox" name="dsb_require_mutual_like" <?php checked( $require_mutual ); ?>>
-									<?php esc_html_e( 'Require mutual like before messaging', 'dating-site-builder' ); ?>
+									<input type="checkbox" name="dsb_require_mutual_like" value="1" <?php checked( $require_mutual, true ); ?>>
+									<?php esc_html_e( 'Require mutual like before messaging (recommended for quality control)', 'dating-site-builder' ); ?>
 								</label>
 							</td>
 						</tr>
@@ -1728,13 +2054,13 @@ class DSB_Admin {
 							<th scope="row"><?php esc_html_e( 'Safety Features', 'dating-site-builder' ); ?></th>
 							<td>
 								<label>
-									<input type="checkbox" name="dsb_enable_blocking" <?php checked( $enable_blocking ); ?>>
-									<?php esc_html_e( 'Allow members to block other members', 'dating-site-builder' ); ?>
+									<input type="checkbox" name="dsb_enable_blocking" value="1" <?php checked( $enable_blocking, true ); ?>>
+									<?php esc_html_e( 'Allow users to block other users', 'dating-site-builder' ); ?>
 								</label>
 								<br><br>
 								<label>
-									<input type="checkbox" name="dsb_enable_reporting" <?php checked( $enable_reporting ); ?>>
-									<?php esc_html_e( 'Allow members to report inappropriate profiles', 'dating-site-builder' ); ?>
+									<input type="checkbox" name="dsb_enable_reporting" value="1" <?php checked( $enable_reporting, true ); ?>>
+									<?php esc_html_e( 'Enable user/message reporting system', 'dating-site-builder' ); ?>
 								</label>
 							</td>
 						</tr>
@@ -1742,22 +2068,26 @@ class DSB_Admin {
 				</div>
 
 				<div class="dsb-settings-section">
-					<h2><?php esc_html_e( 'Photo Settings', 'dating-site-builder' ); ?></h2>
+					<h2><?php esc_html_e( 'Monetization', 'dating-site-builder' ); ?></h2>
 					<table class="form-table">
 						<tr>
-							<th scope="row"><label for="dsb_max_photos"><?php esc_html_e( 'Maximum Photos', 'dating-site-builder' ); ?></label></th>
+							<th scope="row"><?php esc_html_e( 'Membership Tiers', 'dating-site-builder' ); ?></th>
 							<td>
-								<input type="number" name="dsb_max_photos" id="dsb_max_photos" value="<?php echo esc_attr( $max_photos ); ?>" min="1" max="20" class="small-text">
-								<p class="description"><?php esc_html_e( 'Maximum number of photos per member profile.', 'dating-site-builder' ); ?></p>
-							</td>
-						</tr>
-						<tr>
-							<th scope="row"><?php esc_html_e( 'Private Photos', 'dating-site-builder' ); ?></th>
-							<td>
-								<label>
-									<input type="checkbox" name="dsb_enable_private_photos" <?php checked( $enable_private ); ?>>
-									<?php esc_html_e( 'Allow members to mark photos as private (requires approval to view)', 'dating-site-builder' ); ?>
-								</label>
+								<fieldset>
+									<label>
+										<input type="radio" name="dsb_membership_enabled" value="0" <?php checked( $membership_enabled, false ); ?>>
+										<strong><?php esc_html_e( 'Free Only', 'dating-site-builder' ); ?></strong> &mdash;
+										<span class="description"><?php esc_html_e( 'All features available to all users.', 'dating-site-builder' ); ?></span>
+									</label><br>
+									<label>
+										<input type="radio" name="dsb_membership_enabled" value="1" <?php checked( $membership_enabled, true ); ?>>
+										<strong><?php esc_html_e( 'Free + Paid Tiers', 'dating-site-builder' ); ?></strong> &mdash;
+										<span class="description"><?php esc_html_e( 'Set up free and premium membership roles (payment gateway integration required).', 'dating-site-builder' ); ?></span>
+									</label>
+								</fieldset>
+								<p class="description">
+									<?php esc_html_e( 'Note: Payment gateway integration (Stripe, PayPal) must be added separately using the plugin hooks.', 'dating-site-builder' ); ?>
+								</p>
 							</td>
 						</tr>
 					</table>
@@ -1832,5 +2162,440 @@ class DSB_Admin {
 		);
 		
 		wp_send_json_success();
+	}
+
+	/**
+	 * Determine whether the given WP_User belongs to the dating site.
+	 *
+	 * The photo manager only makes sense for members; we still allow
+	 * administrators to see/manage it on their own profile so they can
+	 * test, but plain subscribers are skipped.
+	 */
+	private function is_dating_user( $user ) {
+		if ( ! ( $user instanceof WP_User ) ) {
+			return false;
+		}
+		$dating_roles = array( 'dating_member', 'dating_premium', 'administrator' );
+		foreach ( $dating_roles as $role ) {
+			if ( in_array( $role, (array) $user->roles, true ) ) {
+				return true;
+			}
+		}
+		// Always allow when the user has dating photos already stored.
+		$photos = get_user_meta( $user->ID, 'dsb_photos', true );
+		return ! empty( $photos );
+	}
+
+	/**
+	 * Render the dating profile photo manager on user-edit / profile screens.
+	 *
+	 * Hooked into 'show_user_profile' and 'edit_user_profile' so admins can
+	 * add, reorder, and remove a member's profile photos directly from the
+	 * standard WP user edit screen.
+	 */
+	public function render_user_profile_photos( $user ) {
+		if ( ! current_user_can( 'edit_user', $user->ID ) ) {
+			return;
+		}
+		if ( ! $this->is_dating_user( $user ) ) {
+			return;
+		}
+
+		// Make sure wp.media is available for the "Add Photo(s)" picker.
+		wp_enqueue_media();
+
+		$photos = get_user_meta( $user->ID, 'dsb_photos', true );
+		if ( ! is_array( $photos ) ) {
+			$photos = array();
+		}
+		$max_photos = (int) get_option( 'dsb_max_photos', 10 );
+		if ( $max_photos < 1 ) {
+			$max_photos = 10;
+		}
+		?>
+		<h2><?php esc_html_e( 'Dating Profile Photos', 'dating-site-builder' ); ?></h2>
+		<p class="description">
+			<?php esc_html_e( 'Manage this member\'s profile photos. The first photo is shown as their main photo. Drag the "Set Main" button to promote a photo, or remove photos that should no longer appear on their profile.', 'dating-site-builder' ); ?>
+		</p>
+		<?php wp_nonce_field( 'dsb_user_photos_' . $user->ID, 'dsb_user_photos_nonce' ); ?>
+		<table class="form-table" role="presentation">
+			<tr>
+				<th scope="row"><?php esc_html_e( 'Profile Photos', 'dating-site-builder' ); ?></th>
+				<td>
+					<div id="dsb-user-photos" class="dsb-user-photos" data-max="<?php echo esc_attr( $max_photos ); ?>">
+						<?php if ( empty( $photos ) ) : ?>
+							<p class="dsb-user-photos-empty description">
+								<?php esc_html_e( 'No profile photos yet. Use the button below to add photos from the media library.', 'dating-site-builder' ); ?>
+							</p>
+						<?php else : ?>
+							<?php foreach ( $photos as $index => $photo_url ) : ?>
+								<div class="dsb-user-photo-item">
+									<img src="<?php echo esc_url( $photo_url ); ?>" alt="">
+									<input type="hidden" name="dsb_photos[]" value="<?php echo esc_attr( $photo_url ); ?>">
+									<div class="dsb-user-photo-actions">
+										<?php if ( 0 === $index ) : ?>
+											<span class="dsb-user-photo-main-badge"><?php esc_html_e( 'Main', 'dating-site-builder' ); ?></span>
+										<?php else : ?>
+											<button type="button" class="button button-small dsb-user-photo-make-main"><?php esc_html_e( 'Set Main', 'dating-site-builder' ); ?></button>
+										<?php endif; ?>
+										<button type="button" class="button button-small dsb-user-photo-remove"><?php esc_html_e( 'Remove', 'dating-site-builder' ); ?></button>
+									</div>
+								</div>
+							<?php endforeach; ?>
+						<?php endif; ?>
+					</div>
+					<p>
+						<button type="button" class="button button-primary" id="dsb-user-photo-add">
+							<?php esc_html_e( 'Add Photo(s) from Media Library', 'dating-site-builder' ); ?>
+						</button>
+					</p>
+					<p class="description">
+						<?php
+						printf(
+							/* translators: %d: maximum number of profile photos. */
+							esc_html__( 'Up to %d photos per member. Click "Update User" to save changes.', 'dating-site-builder' ),
+							(int) $max_photos
+						);
+						?>
+					</p>
+				</td>
+			</tr>
+		</table>
+		<style>
+			.dsb-user-photos { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; }
+			.dsb-user-photos-empty { width: 100%; margin: 0; }
+			.dsb-user-photo-item { position: relative; width: 150px; border: 1px solid #ccd0d4; border-radius: 4px; overflow: hidden; background: #fff; padding: 6px; box-sizing: border-box; }
+			.dsb-user-photo-item img { display: block; width: 100%; height: 140px; object-fit: cover; border-radius: 2px; }
+			.dsb-user-photo-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; align-items: center; justify-content: space-between; }
+			.dsb-user-photo-main-badge { background: #2271b1; color: #fff; padding: 2px 6px; border-radius: 3px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+		</style>
+		<script>
+		jQuery(function($){
+			var mainLabel   = <?php echo wp_json_encode( __( 'Main', 'dating-site-builder' ) ); ?>;
+			var setMainText = <?php echo wp_json_encode( __( 'Set Main', 'dating-site-builder' ) ); ?>;
+			var removeText  = <?php echo wp_json_encode( __( 'Remove', 'dating-site-builder' ) ); ?>;
+			var maxText     = <?php echo wp_json_encode( __( 'You have reached the maximum number of photos.', 'dating-site-builder' ) ); ?>;
+			var pickerTitle = <?php echo wp_json_encode( __( 'Choose Profile Photo(s)', 'dating-site-builder' ) ); ?>;
+			var pickerBtn   = <?php echo wp_json_encode( __( 'Add to profile', 'dating-site-builder' ) ); ?>;
+			var emptyText   = <?php echo wp_json_encode( __( 'No profile photos yet. Use the button below to add photos from the media library.', 'dating-site-builder' ) ); ?>;
+
+			var $list = $('#dsb-user-photos');
+			var maxPhotos = parseInt( $list.data('max'), 10 ) || 10;
+
+			function count(){
+				return $list.find('.dsb-user-photo-item').length;
+			}
+
+			function refreshLayout(){
+				$list.find('.dsb-user-photos-empty').remove();
+				if ( 0 === count() ) {
+					$list.append(
+						$('<p class="dsb-user-photos-empty description"></p>').text( emptyText )
+					);
+					return;
+				}
+				$list.find('.dsb-user-photo-item').each(function(idx){
+					var $actions = $(this).find('.dsb-user-photo-actions');
+					$actions.empty();
+					if ( 0 === idx ) {
+						$('<span class="dsb-user-photo-main-badge"></span>')
+							.text( mainLabel )
+							.appendTo( $actions );
+					} else {
+						$('<button type="button" class="button button-small dsb-user-photo-make-main"></button>')
+							.text( setMainText )
+							.appendTo( $actions );
+					}
+					$('<button type="button" class="button button-small dsb-user-photo-remove"></button>')
+						.text( removeText )
+						.appendTo( $actions );
+				});
+			}
+
+			function buildItem( url ){
+				var $item = $('<div class="dsb-user-photo-item"></div>');
+				$('<img alt="">').attr('src', url).appendTo($item);
+				$('<input type="hidden" name="dsb_photos[]">').val(url).appendTo($item);
+				$('<div class="dsb-user-photo-actions"></div>').appendTo($item);
+				return $item;
+			}
+
+			$list.on('click', '.dsb-user-photo-remove', function(e){
+				e.preventDefault();
+				$(this).closest('.dsb-user-photo-item').remove();
+				refreshLayout();
+			});
+
+			$list.on('click', '.dsb-user-photo-make-main', function(e){
+				e.preventDefault();
+				var $item = $(this).closest('.dsb-user-photo-item');
+				$list.prepend($item);
+				refreshLayout();
+			});
+
+			var frame;
+			$('#dsb-user-photo-add').on('click', function(e){
+				e.preventDefault();
+				if ( count() >= maxPhotos ) {
+					window.alert( maxText );
+					return;
+				}
+				if ( ! frame ) {
+					frame = wp.media({
+						title: pickerTitle,
+						button: { text: pickerBtn },
+						multiple: true,
+						library: { type: 'image' }
+					});
+					frame.on('select', function(){
+						var attachments = frame.state().get('selection').toJSON();
+						for ( var i = 0; i < attachments.length; i++ ) {
+							if ( count() >= maxPhotos ) {
+								window.alert( maxText );
+								break;
+							}
+							var url = attachments[i].url;
+							if ( url ) {
+								$list.append( buildItem( url ) );
+							}
+						}
+						refreshLayout();
+					});
+				}
+				frame.open();
+			});
+		});
+		</script>
+		<?php
+	}
+
+	/**
+	 * Persist the dating profile photo list when a user record is saved.
+	 *
+	 * Hooked into 'personal_options_update' (own profile) and
+	 * 'edit_user_profile_update' (admins editing other users).
+	 */
+	public function save_user_profile_photos( $user_id ) {
+		if ( ! current_user_can( 'edit_user', $user_id ) ) {
+			return;
+		}
+		if ( ! isset( $_POST['dsb_user_photos_nonce'] ) ) {
+			return;
+		}
+		if ( ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['dsb_user_photos_nonce'] ) ), 'dsb_user_photos_' . $user_id ) ) {
+			return;
+		}
+
+		$max_photos = (int) get_option( 'dsb_max_photos', 10 );
+		if ( $max_photos < 1 ) {
+			$max_photos = 10;
+		}
+
+		$submitted = ( isset( $_POST['dsb_photos'] ) && is_array( $_POST['dsb_photos'] ) )
+			? wp_unslash( $_POST['dsb_photos'] )
+			: array();
+
+		$clean = array();
+		foreach ( $submitted as $url ) {
+			$url = esc_url_raw( $url );
+			if ( '' === $url ) {
+				continue;
+			}
+			$clean[] = $url;
+			if ( count( $clean ) >= $max_photos ) {
+				break;
+			}
+		}
+
+		update_user_meta( $user_id, 'dsb_photos', $clean );
+	}
+
+	/**
+	 * Render every dating profile field on the standard WP user-edit
+	 * screen so admins can review and (importantly) moderate any
+	 * inappropriate content a member may have posted.
+	 *
+	 * Mirrors the front-end profile-edit form's input types so the
+	 * admin gets exactly the same controls a member would see.
+	 *
+	 * Hooked into 'show_user_profile' and 'edit_user_profile'.
+	 */
+	public function render_user_profile_fields( $user ) {
+		if ( ! current_user_can( 'edit_user', $user->ID ) ) {
+			return;
+		}
+		if ( ! $this->is_dating_user( $user ) ) {
+			return;
+		}
+
+		$fields = DSB_Profile_Fields::get_all_fields();
+		if ( empty( $fields ) ) {
+			return;
+		}
+		?>
+		<h2><?php esc_html_e( 'Dating Profile Fields', 'dating-site-builder' ); ?></h2>
+		<p class="description">
+			<?php esc_html_e( 'Edit any of this member\'s dating profile fields below. Useful for moderating inappropriate content — changes save when you click "Update User" / "Update Profile".', 'dating-site-builder' ); ?>
+		</p>
+		<?php wp_nonce_field( 'dsb_user_fields_' . $user->ID, 'dsb_user_fields_nonce' ); ?>
+		<table class="form-table" role="presentation">
+			<?php foreach ( $fields as $field_key => $field ) :
+				$value     = get_user_meta( $user->ID, 'dsb_' . $field_key, true );
+				$field_id  = 'dsb_field_' . $field_key;
+				$type      = isset( $field['type'] ) ? $field['type'] : 'text';
+				$maxlen    = ! empty( $field['maxlength'] ) ? (int) $field['maxlength'] : 0;
+				?>
+				<tr>
+					<th scope="row">
+						<label for="<?php echo esc_attr( $field_id ); ?>">
+							<?php echo esc_html( $field['label'] ); ?>
+						</label>
+					</th>
+					<td>
+						<?php
+						switch ( $type ) {
+							case 'date':
+								?>
+								<input type="date"
+									id="<?php echo esc_attr( $field_id ); ?>"
+									name="dsb_field[<?php echo esc_attr( $field_key ); ?>]"
+									value="<?php echo esc_attr( is_array( $value ) ? '' : $value ); ?>">
+								<?php
+								break;
+
+							case 'textarea':
+								?>
+								<textarea id="<?php echo esc_attr( $field_id ); ?>"
+									name="dsb_field[<?php echo esc_attr( $field_key ); ?>]"
+									rows="4"
+									class="large-text"
+									<?php echo $maxlen ? 'maxlength="' . esc_attr( $maxlen ) . '"' : ''; ?>><?php echo esc_textarea( is_array( $value ) ? '' : $value ); ?></textarea>
+								<?php
+								break;
+
+							case 'select':
+								?>
+								<select id="<?php echo esc_attr( $field_id ); ?>" name="dsb_field[<?php echo esc_attr( $field_key ); ?>]">
+									<option value=""><?php esc_html_e( '— Select —', 'dating-site-builder' ); ?></option>
+									<?php
+									$options = isset( $field['options'] ) && is_array( $field['options'] ) ? $field['options'] : array();
+									foreach ( $options as $opt_key => $opt_label ) :
+										if ( '' === $opt_key ) {
+											continue;
+										}
+										?>
+										<option value="<?php echo esc_attr( $opt_key ); ?>" <?php selected( $value, $opt_key ); ?>>
+											<?php echo esc_html( $opt_label ); ?>
+										</option>
+									<?php endforeach; ?>
+								</select>
+								<?php
+								break;
+
+							case 'checkbox':
+								$selected_values = is_array( $value ) ? $value : array();
+								$options         = isset( $field['options'] ) && is_array( $field['options'] ) ? $field['options'] : array();
+								?>
+								<fieldset>
+									<?php foreach ( $options as $opt_key => $opt_label ) : ?>
+										<label style="display:block;margin-bottom:4px;">
+											<input type="checkbox"
+												name="dsb_field[<?php echo esc_attr( $field_key ); ?>][]"
+												value="<?php echo esc_attr( $opt_key ); ?>"
+												<?php checked( in_array( (string) $opt_key, array_map( 'strval', $selected_values ), true ) ); ?>>
+											<?php echo esc_html( $opt_label ); ?>
+										</label>
+									<?php endforeach; ?>
+								</fieldset>
+								<?php
+								break;
+
+							case 'text':
+							default:
+								?>
+								<input type="text"
+									id="<?php echo esc_attr( $field_id ); ?>"
+									name="dsb_field[<?php echo esc_attr( $field_key ); ?>]"
+									value="<?php echo esc_attr( is_array( $value ) ? '' : $value ); ?>"
+									class="regular-text"
+									<?php echo $maxlen ? 'maxlength="' . esc_attr( $maxlen ) . '"' : ''; ?>>
+								<?php
+								break;
+						}
+						?>
+						<?php if ( ! empty( $field['description'] ) ) : ?>
+							<p class="description"><?php echo esc_html( $field['description'] ); ?></p>
+						<?php endif; ?>
+					</td>
+				</tr>
+			<?php endforeach; ?>
+		</table>
+		<?php
+	}
+
+	/**
+	 * Persist edited dating profile fields when an admin (or the user)
+	 * saves a WP user record. Uses DSB_Profile_Fields::sanitize_field()
+	 * so option-backed fields stay within their allowed values.
+	 *
+	 * Hooked into 'personal_options_update' and 'edit_user_profile_update'.
+	 */
+	public function save_user_profile_fields( $user_id ) {
+		if ( ! current_user_can( 'edit_user', $user_id ) ) {
+			return;
+		}
+		if ( ! isset( $_POST['dsb_user_fields_nonce'] ) ) {
+			return;
+		}
+		if ( ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['dsb_user_fields_nonce'] ) ), 'dsb_user_fields_' . $user_id ) ) {
+			return;
+		}
+
+		$fields    = DSB_Profile_Fields::get_all_fields();
+		$submitted = ( isset( $_POST['dsb_field'] ) && is_array( $_POST['dsb_field'] ) )
+			? wp_unslash( $_POST['dsb_field'] )
+			: array();
+
+		foreach ( $fields as $field_key => $field ) {
+			$meta_key = 'dsb_' . $field_key;
+			$type     = isset( $field['type'] ) ? $field['type'] : 'text';
+
+			if ( 'checkbox' === $type ) {
+				// Unchecked checkbox groups are not posted at all, so we
+				// treat the absence as "clear all selections" rather than
+				// leaving the previous value untouched.
+				$raw   = isset( $submitted[ $field_key ] ) ? $submitted[ $field_key ] : array();
+				$clean = DSB_Profile_Fields::sanitize_field( $field_key, $raw );
+				update_user_meta( $user_id, $meta_key, $clean );
+				continue;
+			}
+
+			if ( ! array_key_exists( $field_key, $submitted ) ) {
+				continue;
+			}
+
+			$clean = DSB_Profile_Fields::sanitize_field( $field_key, $submitted[ $field_key ] );
+			update_user_meta( $user_id, $meta_key, $clean );
+		}
+	}
+
+	/**
+	 * Hide the built-in WordPress "Website" (user_url) field from the
+	 * profile / user-edit screens so members cannot use the site to
+	 * advertise an external business.
+	 *
+	 * Hooked into 'admin_head-profile.php', 'admin_head-user-edit.php',
+	 * and 'admin_head-user-new.php'.
+	 */
+	public function hide_user_website_field() {
+		?>
+		<style>
+			/* Dating Site Builder: hide the built-in "Website" user field. */
+			tr.user-url-wrap,
+			#your-profile tr.user-url-wrap,
+			#createuser tr.form-field:has(#url),
+			tr.form-field:has(input#url) { display: none !important; }
+		</style>
+		<?php
 	}
 }
