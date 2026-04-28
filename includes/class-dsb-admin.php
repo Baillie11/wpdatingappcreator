@@ -122,6 +122,10 @@ class DSB_Admin {
 			return;
 		}
 
+		// The wizard and settings pages use the WP media library
+		// uploader for the Site Logo field.
+		wp_enqueue_media();
+
 		wp_enqueue_script(
 			'dsb-admin',
 			DSB_PLUGIN_URL . 'admin/js/dsb-admin.js',
@@ -134,8 +138,10 @@ class DSB_Admin {
 			'dsb-admin',
 			'dsbAdmin',
 			array(
-				'ajax_url' => admin_url( 'admin-ajax.php' ),
-				'nonce'    => wp_create_nonce( 'dsb_admin_nonce' ),
+				'ajax_url'         => admin_url( 'admin-ajax.php' ),
+				'nonce'            => wp_create_nonce( 'dsb_admin_nonce' ),
+				'logo_modal_title' => __( 'Choose Site Logo', 'dating-site-builder' ),
+				'logo_modal_btn'   => __( 'Use this logo', 'dating-site-builder' ),
 			)
 		);
 	}
@@ -300,9 +306,12 @@ class DSB_Admin {
 		$site_name = get_option( 'dsb_site_name', '' );
 		$site_type = get_option( 'dsb_site_type', 'standard' );
 		$color_theme = get_option( 'dsb_color_theme', 'romantic_red' );
+		$template_style = get_option( 'dsb_template_style', 'modern' );
+		$site_logo_id = (int) get_option( 'dsb_site_logo', 0 );
+		$site_logo_url = $site_logo_id ? wp_get_attachment_image_url( $site_logo_id, 'medium' ) : '';
 		?>
 		<h2><?php esc_html_e( 'Step 1: Site Identity & Theme', 'dating-site-builder' ); ?></h2>
-		<p><?php esc_html_e( 'Give your dating site a name and choose a color theme.', 'dating-site-builder' ); ?></p>
+		<p><?php esc_html_e( 'Give your dating site a name and choose a design template.', 'dating-site-builder' ); ?></p>
 
 		<table class="form-table">
 			<tr>
@@ -312,6 +321,28 @@ class DSB_Admin {
 				<td>
 					<input type="text" id="dsb_site_name" name="dsb_site_name" value="<?php echo esc_attr( $site_name ); ?>" class="regular-text" placeholder="<?php esc_attr_e( 'e.g., Cupid, LoveMatch, DateNight', 'dating-site-builder' ); ?>">
 					<p class="description"><?php esc_html_e( 'This name will be used in the admin menu (e.g., "Cupid Settings") and can be displayed to your users.', 'dating-site-builder' ); ?></p>
+				</td>
+			</tr>
+			<tr>
+				<th scope="row">
+					<label for="dsb_site_logo"><?php esc_html_e( 'Site Logo', 'dating-site-builder' ); ?></label>
+				</th>
+				<td>
+					<div class="dsb-logo-uploader">
+						<input type="hidden" id="dsb_site_logo" name="dsb_site_logo" value="<?php echo esc_attr( $site_logo_id ); ?>">
+						<div class="dsb-logo-preview" id="dsb-logo-preview" style="<?php echo $site_logo_url ? '' : 'display:none;'; ?>">
+							<img src="<?php echo esc_url( $site_logo_url ); ?>" alt="<?php esc_attr_e( 'Site logo preview', 'dating-site-builder' ); ?>" style="max-width:200px;max-height:200px;display:block;margin-bottom:8px;">
+						</div>
+						<button type="button" class="button" id="dsb-logo-upload-btn">
+							<?php echo $site_logo_id ? esc_html__( 'Change Logo', 'dating-site-builder' ) : esc_html__( 'Choose / Upload Logo', 'dating-site-builder' ); ?>
+						</button>
+						<button type="button" class="button-link dsb-logo-remove-btn" id="dsb-logo-remove-btn" style="<?php echo $site_logo_id ? '' : 'display:none;'; ?>;color:#b32d2e;margin-left:8px;">
+							<?php esc_html_e( 'Remove', 'dating-site-builder' ); ?>
+						</button>
+					</div>
+					<p class="description">
+						<?php esc_html_e( 'Used in the plugin\'s top navigation bar and as the Site Icon / favicon (browser tab, bookmarks, mobile shortcut). For best results upload a square image at least 512 × 512 pixels.', 'dating-site-builder' ); ?>
+					</p>
 				</td>
 			</tr>
 			<tr>
@@ -362,6 +393,46 @@ class DSB_Admin {
 						</label>
 					</div>
 					<p class="description"><?php esc_html_e( 'Choose a color scheme for your dating site. This affects buttons, gradients, and accent colors.', 'dating-site-builder' ); ?></p>
+				</td>
+			</tr>
+			<tr>
+				<th scope="row"><?php esc_html_e( 'Template Style', 'dating-site-builder' ); ?></th>
+				<td>
+					<div class="dsb-template-selector">
+						<label class="dsb-template-option">
+							<input type="radio" name="dsb_template_style" value="modern" <?php checked( $template_style, 'modern' ); ?>>
+							<span class="dsb-template-preview dsb-template-modern">
+								<span class="dsb-template-icon">✨</span>
+								<span class="dsb-template-name"><?php esc_html_e( 'Modern', 'dating-site-builder' ); ?></span>
+								<span class="dsb-template-desc"><?php esc_html_e( 'Classic dating app style with gradients and cards', 'dating-site-builder' ); ?></span>
+							</span>
+						</label>
+						<label class="dsb-template-option">
+							<input type="radio" name="dsb_template_style" value="glassmorphism" <?php checked( $template_style, 'glassmorphism' ); ?>>
+							<span class="dsb-template-preview dsb-template-glassmorphism">
+								<span class="dsb-template-icon">🔮</span>
+								<span class="dsb-template-name"><?php esc_html_e( 'Glassmorphism', 'dating-site-builder' ); ?></span>
+								<span class="dsb-template-desc"><?php esc_html_e( 'Frosted glass effects with blur and transparency', 'dating-site-builder' ); ?></span>
+							</span>
+						</label>
+						<label class="dsb-template-option">
+							<input type="radio" name="dsb_template_style" value="minimalist" <?php checked( $template_style, 'minimalist' ); ?>>
+							<span class="dsb-template-preview dsb-template-minimalist">
+								<span class="dsb-template-icon">◻️</span>
+								<span class="dsb-template-name"><?php esc_html_e( 'Minimalist', 'dating-site-builder' ); ?></span>
+								<span class="dsb-template-desc"><?php esc_html_e( 'Clean, flat design with lots of whitespace', 'dating-site-builder' ); ?></span>
+							</span>
+						</label>
+						<label class="dsb-template-option">
+							<input type="radio" name="dsb_template_style" value="bold_dark" <?php checked( $template_style, 'bold_dark' ); ?>>
+							<span class="dsb-template-preview dsb-template-bold-dark">
+								<span class="dsb-template-icon">🌙</span>
+								<span class="dsb-template-name"><?php esc_html_e( 'Bold Dark', 'dating-site-builder' ); ?></span>
+								<span class="dsb-template-desc"><?php esc_html_e( 'Dark mode with vibrant accents, Tinder-inspired', 'dating-site-builder' ); ?></span>
+							</span>
+						</label>
+					</div>
+					<p class="description"><?php esc_html_e( 'Choose an overall design template. This changes the layout structure, card styles, and visual effects.', 'dating-site-builder' ); ?></p>
 				</td>
 			</tr>
 		</table>
@@ -821,8 +892,27 @@ class DSB_Admin {
 					<td><?php echo esc_html( get_option( 'dsb_site_name', '' ) ?: __( '(Not set)', 'dating-site-builder' ) ); ?></td>
 				</tr>
 				<tr>
+					<td><strong><?php esc_html_e( 'Site Logo:', 'dating-site-builder' ); ?></strong></td>
+					<td>
+						<?php
+						$summary_logo_id  = (int) get_option( 'dsb_site_logo', 0 );
+						$summary_logo_url = $summary_logo_id ? wp_get_attachment_image_url( $summary_logo_id, 'thumbnail' ) : '';
+						if ( $summary_logo_url ) :
+						?>
+							<img src="<?php echo esc_url( $summary_logo_url ); ?>" alt="" style="max-width:80px;max-height:80px;vertical-align:middle;border:1px solid #ddd;border-radius:4px;padding:2px;background:#fff;">
+							<span style="margin-left:8px;color:#666;"><?php esc_html_e( 'Will also be used as the Site Icon / favicon.', 'dating-site-builder' ); ?></span>
+						<?php else : ?>
+							<em><?php esc_html_e( '(No logo uploaded — the existing Site Icon will be left unchanged)', 'dating-site-builder' ); ?></em>
+						<?php endif; ?>
+					</td>
+				</tr>
+				<tr>
 					<td><strong><?php esc_html_e( 'Color Theme:', 'dating-site-builder' ); ?></strong></td>
 					<td><?php echo esc_html( ucwords( str_replace( '_', ' ', get_option( 'dsb_color_theme', 'romantic_red' ) ) ) ); ?></td>
+				</tr>
+				<tr>
+					<td><strong><?php esc_html_e( 'Template Style:', 'dating-site-builder' ); ?></strong></td>
+					<td><?php echo esc_html( ucwords( str_replace( '_', ' ', get_option( 'dsb_template_style', 'modern' ) ) ) ); ?></td>
 				</tr>
 				<tr>
 					<td><strong><?php esc_html_e( 'Site Type:', 'dating-site-builder' ); ?></strong></td>
@@ -880,9 +970,13 @@ class DSB_Admin {
 		if ( $action === 'finish' ) {
 			// Complete setup
 			update_option( 'dsb_setup_complete', true );
-			
+
 			// Create pages with shortcodes
 			$this->create_dating_pages();
+
+			// Apply the chosen logo as the WordPress Site Icon
+			// (favicon, browser tab icon, mobile bookmark icon).
+			$this->apply_site_logo_as_site_icon();
 
 			wp_send_json_success( array(
 				'redirect' => admin_url( 'admin.php?page=dsb-dashboard' ),
@@ -902,7 +996,9 @@ class DSB_Admin {
 		// Sanitize and save all posted options
 		$options_map = array(
 			'dsb_site_name'                   => 'sanitize_text_field',
+			'dsb_site_logo'                   => 'intval',
 			'dsb_color_theme'                 => 'sanitize_text_field',
+			'dsb_template_style'              => 'sanitize_text_field',
 			'dsb_site_type'                   => 'sanitize_text_field',
 			'dsb_minimum_age'                 => 'intval',
 			'dsb_default_country'             => 'sanitize_text_field',
@@ -944,6 +1040,9 @@ class DSB_Admin {
 	 * Create dating pages with shortcodes.
 	 */
 	private function create_dating_pages() {
+		// Pages are split into two passes: top-level pages first (so the
+		// "profile" page ID exists before its children are created), then
+		// child pages which reference their parent via the 'parent' key.
 		$pages = array(
 			'register' => array(
 				'title'   => 'Register',
@@ -955,20 +1054,22 @@ class DSB_Admin {
 				'content' => '[dsb_login]',
 				'option'  => 'dsb_login_page',
 			),
+			'profile' => array(
+				'title'   => 'My Profile',
+				'content' => '[dsb_profile_view]',
+				'option'  => 'dsb_profile_view_page',
+			),
 			'forgot-password' => array(
 				'title'   => 'Forgot Password',
 				'content' => '[dsb_forgot_password]',
 				'option'  => 'dsb_forgot_password_page',
+				'parent'  => 'dsb_profile_view_page',
 			),
 			'profile-edit' => array(
 				'title'   => 'Edit Profile',
 				'content' => '[dsb_profile_edit]',
 				'option'  => 'dsb_profile_edit_page',
-			),
-			'profile' => array(
-				'title'   => 'My Profile',
-				'content' => '[dsb_profile_view]',
-				'option'  => 'dsb_profile_view_page',
+				'parent'  => 'dsb_profile_view_page',
 			),
 			'members' => array(
 				'title'   => 'Browse Members',
@@ -989,13 +1090,20 @@ class DSB_Admin {
 				'title'   => 'Likes & Favorites',
 				'content' => '[dsb_likes]',
 				'option'  => 'dsb_likes_page',
+				'parent'  => 'dsb_profile_view_page',
+			),
+			'chat' => array(
+				'title'   => 'Community Chat',
+				'content' => '[dsb_group_chat]',
+				'option'  => 'dsb_group_chat_page',
 			),
 		);
 
+		// First pass: create / fetch every page and save its option so the
+		// parent option IDs are available for the second pass.
 		foreach ( $pages as $slug => $page_data ) {
-			// Check if page already exists
 			$existing_page = get_page_by_path( $slug );
-			
+
 			if ( $existing_page ) {
 				$page_id = $existing_page->ID;
 			} else {
@@ -1008,9 +1116,30 @@ class DSB_Admin {
 				) );
 			}
 
-			// Save page ID to options for shortcode links
 			if ( $page_id && ! is_wp_error( $page_id ) && ! empty( $page_data['option'] ) ) {
 				update_option( $page_data['option'], $page_id );
+			}
+		}
+
+		// Second pass: enforce parent/child relationships so that Edit
+		// Profile, Forgot Password and Likes & Favorites appear as a
+		// submenu under My Profile in the theme's page menu.
+		foreach ( $pages as $slug => $page_data ) {
+			if ( empty( $page_data['parent'] ) || empty( $page_data['option'] ) ) {
+				continue;
+			}
+
+			$child_id  = (int) get_option( $page_data['option'] );
+			$parent_id = (int) get_option( $page_data['parent'] );
+
+			if ( $child_id && $parent_id ) {
+				$current = get_post( $child_id );
+				if ( $current && (int) $current->post_parent !== $parent_id ) {
+					wp_update_post( array(
+						'ID'          => $child_id,
+						'post_parent' => $parent_id,
+					) );
+				}
 			}
 		}
 
@@ -1024,16 +1153,258 @@ class DSB_Admin {
 	}
 
 	/**
+	 * Apply the chosen Site Logo attachment as WordPress's official
+	 * Site Icon (which generates the favicon, apple-touch-icon and
+	 * the browser-tab icon automatically).
+	 *
+	 * Only updates `site_icon` when the user has actually picked a
+	 * logo and the attachment exists. Leaves any existing site_icon
+	 * alone if the wizard finishes without a logo selection.
+	 */
+	private function apply_site_logo_as_site_icon() {
+		$logo_id = (int) get_option( 'dsb_site_logo', 0 );
+		if ( ! $logo_id ) {
+			return;
+		}
+
+		$attachment = get_post( $logo_id );
+		if ( ! $attachment || 'attachment' !== $attachment->post_type ) {
+			return;
+		}
+
+		update_option( 'site_icon', $logo_id );
+	}
+
+	/**
 	 * Render members page.
 	 */
 	public function render_members() {
-		// Implementation for member management
+		// Handle bulk actions
+		if ( isset( $_POST['dsb_bulk_action'] ) && isset( $_POST['member_ids'] ) ) {
+			check_admin_referer( 'dsb_members_bulk', 'dsb_members_nonce' );
+			$action = sanitize_text_field( $_POST['dsb_bulk_action'] );
+			$member_ids = array_map( 'intval', $_POST['member_ids'] );
+			
+			foreach ( $member_ids as $user_id ) {
+				switch ( $action ) {
+					case 'approve':
+						update_user_meta( $user_id, 'dsb_profile_approved', '1' );
+						break;
+					case 'suspend':
+						update_user_meta( $user_id, 'dsb_suspended', '1' );
+						break;
+					case 'unsuspend':
+						delete_user_meta( $user_id, 'dsb_suspended' );
+						break;
+					case 'ban':
+						update_user_meta( $user_id, 'dsb_banned', '1' );
+						break;
+					case 'unban':
+						delete_user_meta( $user_id, 'dsb_banned' );
+						break;
+				}
+			}
+			echo '<div class="notice notice-success"><p>' . esc_html__( 'Members updated successfully.', 'dating-site-builder' ) . '</p></div>';
+		}
+
+		// Get filter
+		$filter = isset( $_GET['filter'] ) ? sanitize_text_field( $_GET['filter'] ) : 'all';
+		$search = isset( $_GET['s'] ) ? sanitize_text_field( $_GET['s'] ) : '';
+		$paged = isset( $_GET['paged'] ) ? intval( $_GET['paged'] ) : 1;
+		$per_page = 20;
+
+		// Build user query args
+		$args = array(
+			'role__in'    => array( 'dating_member', 'dating_premium' ),
+			'number'      => $per_page,
+			'offset'      => ( $paged - 1 ) * $per_page,
+			'orderby'     => 'registered',
+			'order'       => 'DESC',
+		);
+
+		if ( $search ) {
+			$args['search'] = '*' . $search . '*';
+			$args['search_columns'] = array( 'user_login', 'user_email', 'display_name' );
+		}
+
+		if ( $filter === 'pending' ) {
+			$args['meta_query'] = array(
+				array(
+					'key'     => 'dsb_profile_approved',
+					'compare' => 'NOT EXISTS',
+				),
+			);
+		} elseif ( $filter === 'suspended' ) {
+			$args['meta_key'] = 'dsb_suspended';
+			$args['meta_value'] = '1';
+		} elseif ( $filter === 'banned' ) {
+			$args['meta_key'] = 'dsb_banned';
+			$args['meta_value'] = '1';
+		}
+
+		$user_query = new WP_User_Query( $args );
+		$members = $user_query->get_results();
+		$total_members = $user_query->get_total();
+		$total_pages = ceil( $total_members / $per_page );
+
+		// Count stats
+		$all_count = count( get_users( array( 'role__in' => array( 'dating_member', 'dating_premium' ), 'fields' => 'ID' ) ) );
+		$pending_count = count( get_users( array(
+			'role__in' => array( 'dating_member', 'dating_premium' ),
+			'fields' => 'ID',
+			'meta_query' => array(
+				array( 'key' => 'dsb_profile_approved', 'compare' => 'NOT EXISTS' ),
+			),
+		) ) );
+		$suspended_count = count( get_users( array(
+			'role__in' => array( 'dating_member', 'dating_premium' ),
+			'fields' => 'ID',
+			'meta_key' => 'dsb_suspended',
+			'meta_value' => '1',
+		) ) );
+		$banned_count = count( get_users( array(
+			'role__in' => array( 'dating_member', 'dating_premium' ),
+			'fields' => 'ID',
+			'meta_key' => 'dsb_banned',
+			'meta_value' => '1',
+		) ) );
 		?>
 		<div class="wrap">
 			<h1><?php esc_html_e( 'Manage Members', 'dating-site-builder' ); ?></h1>
-			<p><?php esc_html_e( 'Member management interface - view, approve, suspend, or ban members.', 'dating-site-builder' ); ?></p>
-			<!-- Member list table would go here -->
+
+			<ul class="subsubsub">
+				<li><a href="<?php echo esc_url( admin_url( 'admin.php?page=dsb-members' ) ); ?>" class="<?php echo $filter === 'all' ? 'current' : ''; ?>"><?php esc_html_e( 'All', 'dating-site-builder' ); ?> <span class="count">(<?php echo esc_html( $all_count ); ?>)</span></a> |</li>
+				<li><a href="<?php echo esc_url( admin_url( 'admin.php?page=dsb-members&filter=pending' ) ); ?>" class="<?php echo $filter === 'pending' ? 'current' : ''; ?>"><?php esc_html_e( 'Pending Approval', 'dating-site-builder' ); ?> <span class="count">(<?php echo esc_html( $pending_count ); ?>)</span></a> |</li>
+				<li><a href="<?php echo esc_url( admin_url( 'admin.php?page=dsb-members&filter=suspended' ) ); ?>" class="<?php echo $filter === 'suspended' ? 'current' : ''; ?>"><?php esc_html_e( 'Suspended', 'dating-site-builder' ); ?> <span class="count">(<?php echo esc_html( $suspended_count ); ?>)</span></a> |</li>
+				<li><a href="<?php echo esc_url( admin_url( 'admin.php?page=dsb-members&filter=banned' ) ); ?>" class="<?php echo $filter === 'banned' ? 'current' : ''; ?>"><?php esc_html_e( 'Banned', 'dating-site-builder' ); ?> <span class="count">(<?php echo esc_html( $banned_count ); ?>)</span></a></li>
+			</ul>
+
+			<form method="get" class="search-form">
+				<input type="hidden" name="page" value="dsb-members">
+				<?php if ( $filter !== 'all' ) : ?>
+					<input type="hidden" name="filter" value="<?php echo esc_attr( $filter ); ?>">
+				<?php endif; ?>
+				<p class="search-box">
+					<label class="screen-reader-text" for="member-search-input"><?php esc_html_e( 'Search Members', 'dating-site-builder' ); ?></label>
+					<input type="search" id="member-search-input" name="s" value="<?php echo esc_attr( $search ); ?>">
+					<input type="submit" id="search-submit" class="button" value="<?php esc_attr_e( 'Search Members', 'dating-site-builder' ); ?>">
+				</p>
+			</form>
+
+			<form method="post">
+				<?php wp_nonce_field( 'dsb_members_bulk', 'dsb_members_nonce' ); ?>
+				
+				<div class="tablenav top">
+					<div class="alignleft actions bulkactions">
+						<select name="dsb_bulk_action">
+							<option value=""><?php esc_html_e( 'Bulk Actions', 'dating-site-builder' ); ?></option>
+							<option value="approve"><?php esc_html_e( 'Approve', 'dating-site-builder' ); ?></option>
+							<option value="suspend"><?php esc_html_e( 'Suspend', 'dating-site-builder' ); ?></option>
+							<option value="unsuspend"><?php esc_html_e( 'Unsuspend', 'dating-site-builder' ); ?></option>
+							<option value="ban"><?php esc_html_e( 'Ban', 'dating-site-builder' ); ?></option>
+							<option value="unban"><?php esc_html_e( 'Unban', 'dating-site-builder' ); ?></option>
+						</select>
+						<input type="submit" class="button action" value="<?php esc_attr_e( 'Apply', 'dating-site-builder' ); ?>">
+					</div>
+					<div class="tablenav-pages">
+						<span class="displaying-num"><?php printf( esc_html__( '%s items', 'dating-site-builder' ), number_format_i18n( $total_members ) ); ?></span>
+					</div>
+				</div>
+
+				<table class="wp-list-table widefat fixed striped users">
+					<thead>
+						<tr>
+							<td class="manage-column column-cb check-column"><input type="checkbox" id="cb-select-all-1"></td>
+							<th scope="col"><?php esc_html_e( 'Photo', 'dating-site-builder' ); ?></th>
+							<th scope="col"><?php esc_html_e( 'Username', 'dating-site-builder' ); ?></th>
+							<th scope="col"><?php esc_html_e( 'Email', 'dating-site-builder' ); ?></th>
+							<th scope="col"><?php esc_html_e( 'Registered', 'dating-site-builder' ); ?></th>
+							<th scope="col"><?php esc_html_e( 'Status', 'dating-site-builder' ); ?></th>
+							<th scope="col"><?php esc_html_e( 'Actions', 'dating-site-builder' ); ?></th>
+						</tr>
+					</thead>
+					<tbody>
+						<?php if ( empty( $members ) ) : ?>
+							<tr>
+								<td colspan="7"><?php esc_html_e( 'No members found.', 'dating-site-builder' ); ?></td>
+							</tr>
+						<?php else : ?>
+							<?php foreach ( $members as $member ) : 
+								$is_approved = get_user_meta( $member->ID, 'dsb_profile_approved', true );
+								$is_suspended = get_user_meta( $member->ID, 'dsb_suspended', true );
+								$is_banned = get_user_meta( $member->ID, 'dsb_banned', true );
+								$photos = get_user_meta( $member->ID, 'dsb_photos', true );
+								$main_photo = ! empty( $photos ) && is_array( $photos ) ? $photos[0] : '';
+							?>
+								<tr>
+									<th scope="row" class="check-column">
+										<input type="checkbox" name="member_ids[]" value="<?php echo esc_attr( $member->ID ); ?>">
+									</th>
+									<td>
+										<?php if ( $main_photo ) : ?>
+											<img src="<?php echo esc_url( $main_photo ); ?>" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;">
+										<?php else : ?>
+											<?php echo get_avatar( $member->ID, 40 ); ?>
+										<?php endif; ?>
+									</td>
+									<td>
+										<strong><?php echo esc_html( $member->display_name ); ?></strong>
+										<br><small><?php echo esc_html( $member->user_login ); ?></small>
+									</td>
+									<td><?php echo esc_html( $member->user_email ); ?></td>
+									<td><?php echo esc_html( date_i18n( get_option( 'date_format' ), strtotime( $member->user_registered ) ) ); ?></td>
+									<td>
+										<?php if ( $is_banned ) : ?>
+											<span class="dsb-status dsb-status-banned"><?php esc_html_e( 'Banned', 'dating-site-builder' ); ?></span>
+										<?php elseif ( $is_suspended ) : ?>
+											<span class="dsb-status dsb-status-suspended"><?php esc_html_e( 'Suspended', 'dating-site-builder' ); ?></span>
+										<?php elseif ( ! $is_approved ) : ?>
+											<span class="dsb-status dsb-status-pending"><?php esc_html_e( 'Pending', 'dating-site-builder' ); ?></span>
+										<?php else : ?>
+											<span class="dsb-status dsb-status-active"><?php esc_html_e( 'Active', 'dating-site-builder' ); ?></span>
+										<?php endif; ?>
+									</td>
+									<td>
+										<a href="<?php echo esc_url( admin_url( 'user-edit.php?user_id=' . $member->ID ) ); ?>" class="button button-small"><?php esc_html_e( 'Edit', 'dating-site-builder' ); ?></a>
+										<?php if ( ! $is_approved ) : ?>
+											<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=dsb-members&action=approve&user_id=' . $member->ID ), 'dsb_member_action' ) ); ?>" class="button button-small button-primary"><?php esc_html_e( 'Approve', 'dating-site-builder' ); ?></a>
+										<?php endif; ?>
+									</td>
+								</tr>
+							<?php endforeach; ?>
+						<?php endif; ?>
+					</tbody>
+				</table>
+
+				<?php if ( $total_pages > 1 ) : ?>
+					<div class="tablenav bottom">
+						<div class="tablenav-pages">
+							<?php
+							$page_links = paginate_links( array(
+								'base'      => add_query_arg( 'paged', '%#%' ),
+								'format'    => '',
+								'prev_text' => '&laquo;',
+								'next_text' => '&raquo;',
+								'total'     => $total_pages,
+								'current'   => $paged,
+							) );
+							echo $page_links;
+							?>
+						</div>
+					</div>
+				<?php endif; ?>
+			</form>
 		</div>
+
+		<style>
+			.dsb-status { display: inline-block; padding: 3px 8px; border-radius: 3px; font-size: 12px; font-weight: 500; }
+			.dsb-status-active { background: #d4edda; color: #155724; }
+			.dsb-status-pending { background: #fff3cd; color: #856404; }
+			.dsb-status-suspended { background: #ffeaa7; color: #856404; }
+			.dsb-status-banned { background: #f8d7da; color: #721c24; }
+			.search-form { float: right; margin-bottom: 10px; }
+			.subsubsub { margin-bottom: 40px; }
+		</style>
 		<?php
 	}
 
@@ -1041,13 +1412,174 @@ class DSB_Admin {
 	 * Render reports page.
 	 */
 	public function render_reports() {
-		// Implementation for reports management
+		global $wpdb;
+		$reports_table = $wpdb->prefix . 'dsb_reports';
+
+		// Handle resolve action
+		if ( isset( $_GET['action'] ) && $_GET['action'] === 'resolve' && isset( $_GET['report_id'] ) ) {
+			check_admin_referer( 'dsb_report_action' );
+			$report_id = intval( $_GET['report_id'] );
+			$wpdb->update(
+				$reports_table,
+				array(
+					'status'      => 'resolved',
+					'resolved_at' => current_time( 'mysql' ),
+					'resolved_by' => get_current_user_id(),
+				),
+				array( 'id' => $report_id ),
+				array( '%s', '%s', '%d' ),
+				array( '%d' )
+			);
+			echo '<div class="notice notice-success"><p>' . esc_html__( 'Report resolved.', 'dating-site-builder' ) . '</p></div>';
+		}
+
+		// Handle dismiss action
+		if ( isset( $_GET['action'] ) && $_GET['action'] === 'dismiss' && isset( $_GET['report_id'] ) ) {
+			check_admin_referer( 'dsb_report_action' );
+			$report_id = intval( $_GET['report_id'] );
+			$wpdb->update(
+				$reports_table,
+				array(
+					'status'      => 'dismissed',
+					'resolved_at' => current_time( 'mysql' ),
+					'resolved_by' => get_current_user_id(),
+				),
+				array( 'id' => $report_id ),
+				array( '%s', '%s', '%d' ),
+				array( '%d' )
+			);
+			echo '<div class="notice notice-info"><p>' . esc_html__( 'Report dismissed.', 'dating-site-builder' ) . '</p></div>';
+		}
+
+		$filter = isset( $_GET['filter'] ) ? sanitize_text_field( $_GET['filter'] ) : 'pending';
+		$paged = isset( $_GET['paged'] ) ? intval( $_GET['paged'] ) : 1;
+		$per_page = 20;
+		$offset = ( $paged - 1 ) * $per_page;
+
+		// Get counts
+		$pending_count = $wpdb->get_var( "SELECT COUNT(*) FROM $reports_table WHERE status = 'pending'" );
+		$resolved_count = $wpdb->get_var( "SELECT COUNT(*) FROM $reports_table WHERE status = 'resolved'" );
+		$dismissed_count = $wpdb->get_var( "SELECT COUNT(*) FROM $reports_table WHERE status = 'dismissed'" );
+		$all_count = $wpdb->get_var( "SELECT COUNT(*) FROM $reports_table" );
+
+		// Build query
+		$where = '';
+		if ( $filter !== 'all' ) {
+			$where = $wpdb->prepare( " WHERE status = %s", $filter );
+		}
+
+		$total = $wpdb->get_var( "SELECT COUNT(*) FROM $reports_table $where" );
+		$total_pages = ceil( $total / $per_page );
+
+		$reports = $wpdb->get_results( $wpdb->prepare(
+			"SELECT * FROM $reports_table $where ORDER BY created_at DESC LIMIT %d OFFSET %d",
+			$per_page,
+			$offset
+		) );
 		?>
 		<div class="wrap">
 			<h1><?php esc_html_e( 'User Reports', 'dating-site-builder' ); ?></h1>
-			<p><?php esc_html_e( 'View and manage user reports.', 'dating-site-builder' ); ?></p>
-			<!-- Reports table would go here -->
+
+			<ul class="subsubsub">
+				<li><a href="<?php echo esc_url( admin_url( 'admin.php?page=dsb-reports&filter=pending' ) ); ?>" class="<?php echo $filter === 'pending' ? 'current' : ''; ?>"><?php esc_html_e( 'Pending', 'dating-site-builder' ); ?> <span class="count">(<?php echo esc_html( $pending_count ?: 0 ); ?>)</span></a> |</li>
+				<li><a href="<?php echo esc_url( admin_url( 'admin.php?page=dsb-reports&filter=resolved' ) ); ?>" class="<?php echo $filter === 'resolved' ? 'current' : ''; ?>"><?php esc_html_e( 'Resolved', 'dating-site-builder' ); ?> <span class="count">(<?php echo esc_html( $resolved_count ?: 0 ); ?>)</span></a> |</li>
+				<li><a href="<?php echo esc_url( admin_url( 'admin.php?page=dsb-reports&filter=dismissed' ) ); ?>" class="<?php echo $filter === 'dismissed' ? 'current' : ''; ?>"><?php esc_html_e( 'Dismissed', 'dating-site-builder' ); ?> <span class="count">(<?php echo esc_html( $dismissed_count ?: 0 ); ?>)</span></a> |</li>
+				<li><a href="<?php echo esc_url( admin_url( 'admin.php?page=dsb-reports&filter=all' ) ); ?>" class="<?php echo $filter === 'all' ? 'current' : ''; ?>"><?php esc_html_e( 'All', 'dating-site-builder' ); ?> <span class="count">(<?php echo esc_html( $all_count ?: 0 ); ?>)</span></a></li>
+			</ul>
+
+			<table class="wp-list-table widefat fixed striped" style="margin-top:40px;">
+				<thead>
+					<tr>
+						<th scope="col"><?php esc_html_e( 'Reporter', 'dating-site-builder' ); ?></th>
+						<th scope="col"><?php esc_html_e( 'Reported User', 'dating-site-builder' ); ?></th>
+						<th scope="col"><?php esc_html_e( 'Reason', 'dating-site-builder' ); ?></th>
+						<th scope="col"><?php esc_html_e( 'Details', 'dating-site-builder' ); ?></th>
+						<th scope="col"><?php esc_html_e( 'Date', 'dating-site-builder' ); ?></th>
+						<th scope="col"><?php esc_html_e( 'Status', 'dating-site-builder' ); ?></th>
+						<th scope="col"><?php esc_html_e( 'Actions', 'dating-site-builder' ); ?></th>
+					</tr>
+				</thead>
+				<tbody>
+					<?php if ( empty( $reports ) ) : ?>
+						<tr>
+							<td colspan="7"><?php esc_html_e( 'No reports found.', 'dating-site-builder' ); ?></td>
+						</tr>
+					<?php else : ?>
+						<?php foreach ( $reports as $report ) : 
+							$reporter = get_userdata( $report->reporter_id );
+							$reported = get_userdata( $report->reported_id );
+						?>
+							<tr>
+								<td>
+									<?php if ( $reporter ) : ?>
+										<a href="<?php echo esc_url( admin_url( 'user-edit.php?user_id=' . $reporter->ID ) ); ?>">
+											<?php echo esc_html( $reporter->display_name ); ?>
+										</a>
+									<?php else : ?>
+										<?php esc_html_e( 'Deleted User', 'dating-site-builder' ); ?>
+									<?php endif; ?>
+								</td>
+								<td>
+									<?php if ( $reported ) : ?>
+										<a href="<?php echo esc_url( admin_url( 'user-edit.php?user_id=' . $reported->ID ) ); ?>">
+											<strong><?php echo esc_html( $reported->display_name ); ?></strong>
+										</a>
+									<?php else : ?>
+										<?php esc_html_e( 'Deleted User', 'dating-site-builder' ); ?>
+									<?php endif; ?>
+								</td>
+								<td><span class="dsb-reason-badge"><?php echo esc_html( ucwords( str_replace( '_', ' ', $report->reason ) ) ); ?></span></td>
+								<td><?php echo esc_html( wp_trim_words( $report->details, 15 ) ); ?></td>
+								<td><?php echo esc_html( date_i18n( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), strtotime( $report->created_at ) ) ); ?></td>
+								<td>
+									<?php if ( $report->status === 'pending' ) : ?>
+										<span class="dsb-status dsb-status-pending"><?php esc_html_e( 'Pending', 'dating-site-builder' ); ?></span>
+									<?php elseif ( $report->status === 'resolved' ) : ?>
+										<span class="dsb-status dsb-status-active"><?php esc_html_e( 'Resolved', 'dating-site-builder' ); ?></span>
+									<?php else : ?>
+										<span class="dsb-status dsb-status-dismissed"><?php esc_html_e( 'Dismissed', 'dating-site-builder' ); ?></span>
+									<?php endif; ?>
+								</td>
+								<td>
+									<?php if ( $report->status === 'pending' ) : ?>
+										<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=dsb-reports&action=resolve&report_id=' . $report->id ), 'dsb_report_action' ) ); ?>" class="button button-small button-primary"><?php esc_html_e( 'Resolve', 'dating-site-builder' ); ?></a>
+										<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=dsb-reports&action=dismiss&report_id=' . $report->id ), 'dsb_report_action' ) ); ?>" class="button button-small"><?php esc_html_e( 'Dismiss', 'dating-site-builder' ); ?></a>
+										<?php if ( $reported ) : ?>
+											<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=dsb-members&action=ban&user_id=' . $reported->ID ), 'dsb_member_action' ) ); ?>" class="button button-small" style="color:#dc3545;"><?php esc_html_e( 'Ban User', 'dating-site-builder' ); ?></a>
+										<?php endif; ?>
+									<?php endif; ?>
+								</td>
+							</tr>
+						<?php endforeach; ?>
+					<?php endif; ?>
+				</tbody>
+			</table>
+
+			<?php if ( $total_pages > 1 ) : ?>
+				<div class="tablenav bottom">
+					<div class="tablenav-pages">
+						<?php
+						echo paginate_links( array(
+							'base'      => add_query_arg( 'paged', '%#%' ),
+							'format'    => '',
+							'prev_text' => '&laquo;',
+							'next_text' => '&raquo;',
+							'total'     => $total_pages,
+							'current'   => $paged,
+						) );
+						?>
+					</div>
+				</div>
+			<?php endif; ?>
 		</div>
+
+		<style>
+			.dsb-status { display: inline-block; padding: 3px 8px; border-radius: 3px; font-size: 12px; font-weight: 500; }
+			.dsb-status-active { background: #d4edda; color: #155724; }
+			.dsb-status-pending { background: #fff3cd; color: #856404; }
+			.dsb-status-dismissed { background: #e2e3e5; color: #383d41; }
+			.dsb-reason-badge { background: #e9ecef; padding: 2px 8px; border-radius: 10px; font-size: 11px; }
+		</style>
 		<?php
 	}
 
@@ -1055,16 +1587,195 @@ class DSB_Admin {
 	 * Render settings page.
 	 */
 	public function render_settings() {
+		// Save settings
+		if ( isset( $_POST['dsb_save_settings'] ) ) {
+			check_admin_referer( 'dsb_settings', 'dsb_settings_nonce' );
+
+			// General settings
+			update_option( 'dsb_site_name', sanitize_text_field( $_POST['dsb_site_name'] ?? '' ) );
+			update_option( 'dsb_color_theme', sanitize_text_field( $_POST['dsb_color_theme'] ?? 'romantic_red' ) );
+			update_option( 'dsb_minimum_age', intval( $_POST['dsb_minimum_age'] ?? 18 ) );
+			update_option( 'dsb_default_country', sanitize_text_field( $_POST['dsb_default_country'] ?? '' ) );
+
+			// Registration settings
+			update_option( 'dsb_require_email_verification', isset( $_POST['dsb_require_email_verification'] ) );
+			update_option( 'dsb_require_profile_approval', isset( $_POST['dsb_require_profile_approval'] ) );
+
+			// Features
+			update_option( 'dsb_enable_messaging', isset( $_POST['dsb_enable_messaging'] ) );
+			update_option( 'dsb_enable_likes', isset( $_POST['dsb_enable_likes'] ) );
+			update_option( 'dsb_require_mutual_like', isset( $_POST['dsb_require_mutual_like'] ) );
+			update_option( 'dsb_enable_blocking', isset( $_POST['dsb_enable_blocking'] ) );
+			update_option( 'dsb_enable_reporting', isset( $_POST['dsb_enable_reporting'] ) );
+
+			// Photo settings
+			update_option( 'dsb_max_photos', intval( $_POST['dsb_max_photos'] ?? 6 ) );
+			update_option( 'dsb_enable_private_photos', isset( $_POST['dsb_enable_private_photos'] ) );
+
+			echo '<div class="notice notice-success"><p>' . esc_html__( 'Settings saved.', 'dating-site-builder' ) . '</p></div>';
+		}
+
+		// Get current values
+		$site_name = get_option( 'dsb_site_name', '' );
+		$color_theme = get_option( 'dsb_color_theme', 'romantic_red' );
+		$minimum_age = get_option( 'dsb_minimum_age', 18 );
+		$default_country = get_option( 'dsb_default_country', '' );
+		$require_email = get_option( 'dsb_require_email_verification', false );
+		$require_approval = get_option( 'dsb_require_profile_approval', false );
+		$enable_messaging = get_option( 'dsb_enable_messaging', true );
+		$enable_likes = get_option( 'dsb_enable_likes', true );
+		$require_mutual = get_option( 'dsb_require_mutual_like', false );
+		$enable_blocking = get_option( 'dsb_enable_blocking', true );
+		$enable_reporting = get_option( 'dsb_enable_reporting', true );
+		$max_photos = get_option( 'dsb_max_photos', 6 );
+		$enable_private = get_option( 'dsb_enable_private_photos', false );
 		?>
 		<div class="wrap">
 			<h1><?php esc_html_e( 'Dating Site Settings', 'dating-site-builder' ); ?></h1>
-			<p>
-				<a href="<?php echo esc_url( admin_url( 'admin.php?page=dsb-wizard' ) ); ?>" class="button">
-					<?php esc_html_e( 'Re-run Setup Wizard', 'dating-site-builder' ); ?>
-				</a>
-			</p>
-			<!-- Settings form would go here -->
+
+			<form method="post">
+				<?php wp_nonce_field( 'dsb_settings', 'dsb_settings_nonce' ); ?>
+
+				<div class="dsb-settings-section">
+					<h2><?php esc_html_e( 'General Settings', 'dating-site-builder' ); ?></h2>
+					<table class="form-table">
+						<tr>
+							<th scope="row"><label for="dsb_site_name"><?php esc_html_e( 'Site Name', 'dating-site-builder' ); ?></label></th>
+							<td>
+								<input type="text" name="dsb_site_name" id="dsb_site_name" value="<?php echo esc_attr( $site_name ); ?>" class="regular-text">
+								<p class="description"><?php esc_html_e( 'The name of your dating site.', 'dating-site-builder' ); ?></p>
+							</td>
+						</tr>
+						<tr>
+							<th scope="row"><label for="dsb_color_theme"><?php esc_html_e( 'Color Theme', 'dating-site-builder' ); ?></label></th>
+							<td>
+								<select name="dsb_color_theme" id="dsb_color_theme">
+									<option value="romantic_red" <?php selected( $color_theme, 'romantic_red' ); ?>><?php esc_html_e( 'Romantic Red', 'dating-site-builder' ); ?></option>
+									<option value="ocean_blue" <?php selected( $color_theme, 'ocean_blue' ); ?>><?php esc_html_e( 'Ocean Blue', 'dating-site-builder' ); ?></option>
+									<option value="forest_green" <?php selected( $color_theme, 'forest_green' ); ?>><?php esc_html_e( 'Forest Green', 'dating-site-builder' ); ?></option>
+									<option value="royal_purple" <?php selected( $color_theme, 'royal_purple' ); ?>><?php esc_html_e( 'Royal Purple', 'dating-site-builder' ); ?></option>
+									<option value="sunset_orange" <?php selected( $color_theme, 'sunset_orange' ); ?>><?php esc_html_e( 'Sunset Orange', 'dating-site-builder' ); ?></option>
+									<option value="midnight_dark" <?php selected( $color_theme, 'midnight_dark' ); ?>><?php esc_html_e( 'Midnight Dark', 'dating-site-builder' ); ?></option>
+								</select>
+							</td>
+						</tr>
+						<tr>
+							<th scope="row"><label for="dsb_minimum_age"><?php esc_html_e( 'Minimum Age', 'dating-site-builder' ); ?></label></th>
+							<td>
+								<input type="number" name="dsb_minimum_age" id="dsb_minimum_age" value="<?php echo esc_attr( $minimum_age ); ?>" min="18" max="99" class="small-text">
+							</td>
+						</tr>
+						<tr>
+							<th scope="row"><label for="dsb_default_country"><?php esc_html_e( 'Default Country', 'dating-site-builder' ); ?></label></th>
+							<td>
+								<input type="text" name="dsb_default_country" id="dsb_default_country" value="<?php echo esc_attr( $default_country ); ?>" class="regular-text" placeholder="<?php esc_attr_e( 'e.g., Australia', 'dating-site-builder' ); ?>">
+							</td>
+						</tr>
+					</table>
+				</div>
+
+				<div class="dsb-settings-section">
+					<h2><?php esc_html_e( 'Registration & Moderation', 'dating-site-builder' ); ?></h2>
+					<table class="form-table">
+						<tr>
+							<th scope="row"><?php esc_html_e( 'Email Verification', 'dating-site-builder' ); ?></th>
+							<td>
+								<label>
+									<input type="checkbox" name="dsb_require_email_verification" <?php checked( $require_email ); ?>>
+									<?php esc_html_e( 'Require email verification before users can browse members', 'dating-site-builder' ); ?>
+								</label>
+							</td>
+						</tr>
+						<tr>
+							<th scope="row"><?php esc_html_e( 'Profile Approval', 'dating-site-builder' ); ?></th>
+							<td>
+								<label>
+									<input type="checkbox" name="dsb_require_profile_approval" <?php checked( $require_approval ); ?>>
+									<?php esc_html_e( 'Require admin approval before profiles are visible to other members', 'dating-site-builder' ); ?>
+								</label>
+							</td>
+						</tr>
+					</table>
+				</div>
+
+				<div class="dsb-settings-section">
+					<h2><?php esc_html_e( 'Features', 'dating-site-builder' ); ?></h2>
+					<table class="form-table">
+						<tr>
+							<th scope="row"><?php esc_html_e( 'Messaging', 'dating-site-builder' ); ?></th>
+							<td>
+								<label>
+									<input type="checkbox" name="dsb_enable_messaging" <?php checked( $enable_messaging ); ?>>
+									<?php esc_html_e( 'Enable private messaging between members', 'dating-site-builder' ); ?>
+								</label>
+							</td>
+						</tr>
+						<tr>
+							<th scope="row"><?php esc_html_e( 'Likes System', 'dating-site-builder' ); ?></th>
+							<td>
+								<label>
+									<input type="checkbox" name="dsb_enable_likes" <?php checked( $enable_likes ); ?>>
+									<?php esc_html_e( 'Enable likes and favorites', 'dating-site-builder' ); ?>
+								</label>
+								<br><br>
+								<label>
+									<input type="checkbox" name="dsb_require_mutual_like" <?php checked( $require_mutual ); ?>>
+									<?php esc_html_e( 'Require mutual like before messaging', 'dating-site-builder' ); ?>
+								</label>
+							</td>
+						</tr>
+						<tr>
+							<th scope="row"><?php esc_html_e( 'Safety Features', 'dating-site-builder' ); ?></th>
+							<td>
+								<label>
+									<input type="checkbox" name="dsb_enable_blocking" <?php checked( $enable_blocking ); ?>>
+									<?php esc_html_e( 'Allow members to block other members', 'dating-site-builder' ); ?>
+								</label>
+								<br><br>
+								<label>
+									<input type="checkbox" name="dsb_enable_reporting" <?php checked( $enable_reporting ); ?>>
+									<?php esc_html_e( 'Allow members to report inappropriate profiles', 'dating-site-builder' ); ?>
+								</label>
+							</td>
+						</tr>
+					</table>
+				</div>
+
+				<div class="dsb-settings-section">
+					<h2><?php esc_html_e( 'Photo Settings', 'dating-site-builder' ); ?></h2>
+					<table class="form-table">
+						<tr>
+							<th scope="row"><label for="dsb_max_photos"><?php esc_html_e( 'Maximum Photos', 'dating-site-builder' ); ?></label></th>
+							<td>
+								<input type="number" name="dsb_max_photos" id="dsb_max_photos" value="<?php echo esc_attr( $max_photos ); ?>" min="1" max="20" class="small-text">
+								<p class="description"><?php esc_html_e( 'Maximum number of photos per member profile.', 'dating-site-builder' ); ?></p>
+							</td>
+						</tr>
+						<tr>
+							<th scope="row"><?php esc_html_e( 'Private Photos', 'dating-site-builder' ); ?></th>
+							<td>
+								<label>
+									<input type="checkbox" name="dsb_enable_private_photos" <?php checked( $enable_private ); ?>>
+									<?php esc_html_e( 'Allow members to mark photos as private (requires approval to view)', 'dating-site-builder' ); ?>
+								</label>
+							</td>
+						</tr>
+					</table>
+				</div>
+
+				<p class="submit">
+					<input type="submit" name="dsb_save_settings" class="button button-primary" value="<?php esc_attr_e( 'Save Settings', 'dating-site-builder' ); ?>">
+					<a href="<?php echo esc_url( admin_url( 'admin.php?page=dsb-wizard' ) ); ?>" class="button">
+						<?php esc_html_e( 'Re-run Setup Wizard', 'dating-site-builder' ); ?>
+					</a>
+				</p>
+			</form>
 		</div>
+
+		<style>
+			.dsb-settings-section { background: #fff; padding: 1px 20px 20px; margin: 20px 0; border: 1px solid #ccd0d4; }
+			.dsb-settings-section h2 { border-bottom: 1px solid #eee; padding-bottom: 10px; }
+		</style>
 		<?php
 	}
 

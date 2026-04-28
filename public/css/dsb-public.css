@@ -565,6 +565,17 @@
 	font-size: 1.5rem !important;
 }
 
+.dsb-app-logo-img {
+	height: 32px !important;
+	width: auto !important;
+	max-width: 120px !important;
+	display: block !important;
+	object-fit: contain !important;
+	border-radius: 6px !important;
+	background: rgba(255, 255, 255, 0.12) !important;
+	padding: 2px !important;
+}
+
 .dsb-app-nav {
 	display: flex !important;
 	align-items: center !important;
@@ -1576,6 +1587,30 @@ body.dsb-fullscreen-page .is-layout-constrained > :where(:not(.alignleft):not(.a
 	animation: dsb-heartbeat 2s ease-in-out infinite !important;
 }
 
+/* When the admin has uploaded a Site Logo, render the image
+   variant: drop the emoji-sized font, drop the heartbeat
+   animation, and centre the image in a soft circular badge. */
+.dsb-logo.dsb-logo-has-image {
+	font-size: 0 !important;
+	animation: none !important;
+	display: flex !important;
+	align-items: center !important;
+	justify-content: center !important;
+}
+
+.dsb-logo .dsb-logo-img {
+	display: block !important;
+	width: 96px !important;
+	height: 96px !important;
+	max-width: 96px !important;
+	max-height: 96px !important;
+	object-fit: contain !important;
+	border-radius: 50% !important;
+	background: #ffffff !important;
+	padding: 6px !important;
+	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12) !important;
+}
+
 @keyframes dsb-heartbeat {
 	0%, 100% { transform: scale(1); }
 	14% { transform: scale(1.1); }
@@ -1830,5 +1865,400 @@ body.dsb-fullscreen-page .is-layout-constrained > :where(:not(.alignleft):not(.a
 	
 	.dsb-auth-divider {
 		margin: 18px 0 !important;
+	}
+}
+
+/* ===========================
+   GROUP CHAT
+   =========================== */
+.dsb-group-chat-wrapper {
+	display: flex;
+	gap: 24px;
+	max-width: 1200px;
+	margin: 0 auto;
+	height: calc(100vh - 180px);
+	min-height: 500px;
+}
+
+.dsb-chat-container {
+	flex: 1;
+	background: var(--dsb-bg-card);
+	border-radius: var(--dsb-radius-lg);
+	box-shadow: var(--dsb-shadow-lg);
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+
+.dsb-chat-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 20px 24px;
+	background: var(--dsb-gradient-primary);
+	color: white;
+}
+
+.dsb-chat-title h2 {
+	margin: 0;
+	font-size: 1.25rem;
+	font-weight: 700;
+	color: white;
+}
+
+.dsb-chat-title p {
+	margin: 4px 0 0 0;
+	font-size: 0.875rem;
+	opacity: 0.9;
+}
+
+.dsb-chat-online {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	background: rgba(255, 255, 255, 0.2);
+	padding: 8px 16px;
+	border-radius: 20px;
+	font-size: 0.875rem;
+	font-weight: 500;
+}
+
+.dsb-online-indicator {
+	width: 10px;
+	height: 10px;
+	background: #10b981;
+	border-radius: 50%;
+	box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.3);
+	animation: dsb-pulse 2s infinite;
+}
+
+@keyframes dsb-pulse {
+	0%, 100% { box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.3); }
+	50% { box-shadow: 0 0 0 6px rgba(16, 185, 129, 0.1); }
+}
+
+.dsb-chat-messages {
+	flex: 1;
+	overflow-y: auto;
+	padding: 20px;
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+	background: #f8f9fa;
+}
+
+.dsb-chat-loading {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	height: 100%;
+	color: var(--dsb-text-secondary);
+	gap: 12px;
+}
+
+.dsb-spinner {
+	width: 32px;
+	height: 32px;
+	border: 3px solid var(--dsb-border);
+	border-top-color: var(--dsb-primary);
+	border-radius: 50%;
+	animation: dsb-spin 1s linear infinite;
+}
+
+@keyframes dsb-spin {
+	0% { transform: rotate(0deg); }
+	100% { transform: rotate(360deg); }
+}
+
+/* Chat message bubbles */
+.dsb-chat-message {
+	display: flex;
+	gap: 12px;
+	max-width: 80%;
+	animation: dsb-fade-in 0.3s ease;
+}
+
+@keyframes dsb-fade-in {
+	from { opacity: 0; transform: translateY(10px); }
+	to { opacity: 1; transform: translateY(0); }
+}
+
+.dsb-chat-message.own {
+	flex-direction: row-reverse;
+	margin-left: auto;
+}
+
+.dsb-chat-message-avatar {
+	width: 40px;
+	height: 40px;
+	border-radius: 50%;
+	object-fit: cover;
+	flex-shrink: 0;
+}
+
+.dsb-chat-message-avatar a {
+	display: block;
+}
+
+.dsb-chat-message-avatar img {
+	width: 100%;
+	height: 100%;
+	border-radius: 50%;
+	object-fit: cover;
+}
+
+.dsb-chat-message-content {
+	flex: 1;
+}
+
+.dsb-chat-message-header {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 4px;
+}
+
+.dsb-chat-message.own .dsb-chat-message-header {
+	flex-direction: row-reverse;
+}
+
+.dsb-chat-message-username {
+	font-weight: 600;
+	font-size: 0.875rem;
+	color: var(--dsb-text-primary);
+}
+
+.dsb-chat-message-username a {
+	color: inherit;
+	text-decoration: none;
+}
+
+.dsb-chat-message-username a:hover {
+	color: var(--dsb-primary);
+}
+
+.dsb-chat-message-time {
+	font-size: 0.75rem;
+	color: var(--dsb-text-light);
+}
+
+.dsb-chat-message-bubble {
+	background: white;
+	padding: 12px 16px;
+	border-radius: 16px;
+	border-top-left-radius: 4px;
+	box-shadow: var(--dsb-shadow-sm);
+	word-break: break-word;
+	line-height: 1.5;
+}
+
+.dsb-chat-message.own .dsb-chat-message-bubble {
+	background: var(--dsb-gradient-primary);
+	color: white;
+	border-radius: 16px;
+	border-top-right-radius: 4px;
+}
+
+/* Chat input */
+.dsb-chat-input-wrapper {
+	padding: 16px 20px;
+	background: white;
+	border-top: 1px solid var(--dsb-border);
+}
+
+.dsb-chat-form {
+	display: flex;
+	gap: 12px;
+	align-items: center;
+}
+
+.dsb-chat-user-avatar {
+	width: 40px;
+	height: 40px;
+	flex-shrink: 0;
+}
+
+.dsb-chat-user-avatar img {
+	width: 100%;
+	height: 100%;
+	border-radius: 50%;
+	object-fit: cover;
+}
+
+.dsb-chat-input-container {
+	flex: 1;
+	display: flex;
+	gap: 8px;
+	background: #f3f4f6;
+	border-radius: 24px;
+	padding: 4px 4px 4px 16px;
+	align-items: center;
+}
+
+.dsb-chat-input-container input {
+	flex: 1;
+	border: none;
+	background: transparent;
+	padding: 12px 0;
+	font-size: 0.95rem;
+	outline: none;
+}
+
+.dsb-chat-input-container input::placeholder {
+	color: var(--dsb-text-light);
+}
+
+.dsb-chat-send-btn {
+	width: 44px;
+	height: 44px;
+	border: none;
+	background: var(--dsb-gradient-primary);
+	color: white;
+	border-radius: 50%;
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	transition: var(--dsb-transition);
+	flex-shrink: 0;
+}
+
+.dsb-chat-send-btn:hover {
+	transform: scale(1.05);
+	box-shadow: var(--dsb-shadow);
+}
+
+.dsb-chat-send-btn:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+	transform: none;
+}
+
+.dsb-chat-send-btn svg {
+	width: 20px;
+	height: 20px;
+}
+
+/* Chat sidebar */
+.dsb-chat-sidebar {
+	width: 280px;
+	background: var(--dsb-bg-card);
+	border-radius: var(--dsb-radius-lg);
+	box-shadow: var(--dsb-shadow-lg);
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+}
+
+.dsb-chat-sidebar-header {
+	padding: 16px 20px;
+	background: var(--dsb-bg-main);
+	border-bottom: 1px solid var(--dsb-border);
+}
+
+.dsb-chat-sidebar-header h3 {
+	margin: 0;
+	font-size: 0.95rem;
+	font-weight: 600;
+	color: var(--dsb-text-primary);
+}
+
+.dsb-online-users {
+	flex: 1;
+	overflow-y: auto;
+	padding: 12px;
+}
+
+.dsb-online-user {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 10px 12px;
+	border-radius: var(--dsb-radius);
+	transition: var(--dsb-transition);
+	text-decoration: none;
+	color: var(--dsb-text-primary);
+}
+
+.dsb-online-user:hover {
+	background: var(--dsb-bg-main);
+}
+
+.dsb-online-user-avatar {
+	width: 36px;
+	height: 36px;
+	border-radius: 50%;
+	object-fit: cover;
+	position: relative;
+}
+
+.dsb-online-user-avatar::after {
+	content: '';
+	position: absolute;
+	bottom: 0;
+	right: 0;
+	width: 10px;
+	height: 10px;
+	background: #10b981;
+	border: 2px solid white;
+	border-radius: 50%;
+}
+
+.dsb-online-user-name {
+	font-weight: 500;
+	font-size: 0.875rem;
+}
+
+.dsb-no-online-users {
+	text-align: center;
+	padding: 30px 20px;
+	color: var(--dsb-text-secondary);
+	font-size: 0.875rem;
+}
+
+/* Responsive chat */
+@media (max-width: 900px) {
+	.dsb-group-chat-wrapper {
+		flex-direction: column;
+		height: auto;
+	}
+	
+	.dsb-chat-container {
+		height: calc(100vh - 250px);
+		min-height: 450px;
+	}
+	
+	.dsb-chat-sidebar {
+		width: 100%;
+		max-height: 200px;
+	}
+	
+	.dsb-online-users {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px;
+	}
+	
+	.dsb-online-user {
+		flex-direction: column;
+		text-align: center;
+		padding: 8px;
+	}
+}
+
+@media (max-width: 600px) {
+	.dsb-chat-header {
+		flex-direction: column;
+		gap: 12px;
+		text-align: center;
+	}
+	
+	.dsb-chat-message {
+		max-width: 90%;
+	}
+	
+	.dsb-chat-sidebar {
+		display: none;
 	}
 }

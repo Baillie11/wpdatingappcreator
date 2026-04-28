@@ -8,14 +8,280 @@
 class DSB_Frontend {
 
 	/**
+	 * Remove the Login page from `wp_list_pages()` / `wp_page_menu()`
+	 * output when the visitor is already logged in.
+	 *
+	 * @param array $pages Array of WP_Post objects as returned by get_pages().
+	 * @return array
+	 */
+	public function filter_pages_hide_login( $pages ) {
+		if ( is_admin() || ! is_user_logged_in() || empty( $pages ) ) {
+			return $pages;
+		}
+
+		$login_page_id = (int) get_option( 'dsb_login_page' );
+		if ( ! $login_page_id ) {
+			return $pages;
+		}
+
+		foreach ( $pages as $i => $page ) {
+			if ( isset( $page->ID ) && (int) $page->ID === $login_page_id ) {
+				unset( $pages[ $i ] );
+			}
+		}
+
+		return array_values( $pages );
+	}
+
+	/**
+	 * Remove the Login page from custom WP nav menus when the visitor
+	 * is already logged in.
+	 *
+	 * @param array $items Array of nav menu items.
+	 * @return array
+	 */
+	public function filter_nav_menu_items_hide_login( $items ) {
+		if ( is_admin() || ! is_user_logged_in() || empty( $items ) ) {
+			return $items;
+		}
+
+		$login_page_id = (int) get_option( 'dsb_login_page' );
+		if ( ! $login_page_id ) {
+			return $items;
+		}
+
+		foreach ( $items as $i => $item ) {
+			if ( isset( $item->object, $item->object_id )
+				&& 'page' === $item->object
+				&& (int) $item->object_id === $login_page_id ) {
+				unset( $items[ $i ] );
+			}
+		}
+
+		return array_values( $items );
+	}
+
+	/**
+	 * Is the current front-end request a page that contains one of the
+	 * plugin's shortcodes? Used to suppress the theme's own page/nav
+	 * menu on dating pages since the plugin renders its own top nav.
+	 *
+	 * @return bool
+	 */
+	private function is_dsb_page() {
+		if ( is_admin() ) {
+			return false;
+		}
+
+		$post = get_post();
+		if ( ! $post instanceof WP_Post || empty( $post->post_content ) ) {
+			return false;
+		}
+
+		$shortcodes = array(
+			'dsb_register',
+			'dsb_login',
+			'dsb_forgot_password',
+			'dsb_profile_edit',
+			'dsb_profile_view',
+			'dsb_member_directory',
+			'dsb_matches',
+			'dsb_messages',
+			'dsb_likes',
+			'dsb_group_chat',
+		);
+
+		foreach ( $shortcodes as $shortcode ) {
+			if ( has_shortcode( $post->post_content, $shortcode ) ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Suppress the theme's fallback `wp_page_menu()` output on pages
+	 * that use a plugin shortcode, so only the plugin's own top nav is
+	 * visible.
+	 *
+	 * @param string $menu HTML produced by `wp_page_menu()`.
+	 * @return string
+	 */
+	public function filter_hide_theme_page_menu( $menu ) {
+		return $this->is_dsb_page() ? '' : $menu;
+	}
+
+	/**
+	 * Short-circuit `wp_nav_menu()` on pages that use a plugin
+	 * shortcode so the theme's registered menu location renders
+	 * nothing. Returning an empty string replaces the menu output.
+	 *
+	 * @param string|null $output Existing short-circuit value (null by default).
+	 * @return string|null
+	 */
+	public function filter_hide_theme_nav_menu( $output ) {
+		return $this->is_dsb_page() ? '' : $output;
+	}
+
+	/**
+	 * Add a body class on plugin pages so the accompanying CSS can
+	 * hide the theme's page title and make the plugin banner full
+	 * width.
+	 *
+	 * @param array $classes Existing body classes.
+	 * @return array
+	 */
+	public function filter_body_class_dsb_page( $classes ) {
+		if ( $this->is_dsb_page() ) {
+			$classes[] = 'dsb-plugin-page';
+		}
+		return $classes;
+	}
+
+	/**
+	 * Suppress the page title ("Browse Members", "My Profile", ...) on
+	 * plugin pages. Only affects the main query so menus, widgets and
+	 * admin listings are untouched.
+	 *
+	 * @param string $title Current page title.
+	 * @param int    $id    Post ID (optional).
+	 * @return string
+	 */
+	public function filter_remove_page_title( $title, $id = 0 ) {
+		if ( is_admin() ) {
+			return $title;
+		}
+
+		if ( ! in_the_loop() || ! is_main_query() ) {
+			return $title;
+		}
+
+		if ( $id && (int) $id !== (int) get_queried_object_id() ) {
+			return $title;
+		}
+
+		return $this->is_dsb_page() ? '' : $title;
+	}
+
+	/**
+	 * CSS that hides the theme's page-title area and lets the plugin's
+	 * banner span the full viewport. Applied only when the body
+	 * carries the `dsb-plugin-page` class.
+	 *
+	 * @return string
+	 */
+	private function get_full_width_css() {
+		return '
+		/* Dating Site Builder – full-width layout on plugin pages */
+
+		/* Hide the theme\'s header/footer and title wrappers entirely
+		   so the plugin banner can sit flush to the top. */
+		body.dsb-plugin-page .site-header,
+		body.dsb-plugin-page header.site-header,
+		body.dsb-plugin-page #masthead,
+		body.dsb-plugin-page .wp-block-template-part.site-header,
+		body.dsb-plugin-page .wp-block-template-part[data-area="header"],
+		body.dsb-plugin-page .wp-block-template-part:has(nav),
+		body.dsb-plugin-page .site-branding,
+		body.dsb-plugin-page .entry-header,
+		body.dsb-plugin-page .page-header,
+		body.dsb-plugin-page .entry-title,
+		body.dsb-plugin-page .page-title,
+		body.dsb-plugin-page header.entry-header,
+		body.dsb-plugin-page .wp-block-post-title,
+		body.dsb-plugin-page .site-content > header,
+		body.dsb-plugin-page main > header,
+		body.dsb-plugin-page article > header,
+		body.dsb-plugin-page .site-footer,
+		body.dsb-plugin-page footer#colophon,
+		body.dsb-plugin-page .wp-block-template-part[data-area="footer"] { display: none !important; }
+
+		/* Zero out any margin/padding between <body> and the first
+		   visible element so the banner is truly flush to the top.
+		   The WP admin bar adds its own body margin-top via an inline
+		   style, which we leave alone. */
+		body.dsb-plugin-page {
+			margin: 0 !important;
+			padding: 0 !important;
+		}
+
+		body.dsb-plugin-page #page,
+		body.dsb-plugin-page #content,
+		body.dsb-plugin-page #primary,
+		body.dsb-plugin-page .site,
+		body.dsb-plugin-page .site-content,
+		body.dsb-plugin-page .content-area,
+		body.dsb-plugin-page .site-main,
+		body.dsb-plugin-page main,
+		body.dsb-plugin-page article,
+		body.dsb-plugin-page .entry-content,
+		body.dsb-plugin-page .wp-site-blocks,
+		body.dsb-plugin-page .wp-block-group,
+		body.dsb-plugin-page .wp-block-post-content,
+		body.dsb-plugin-page .wp-block-post-template {
+			margin: 0 !important;
+			padding: 0 !important;
+			max-width: none !important;
+			width: 100% !important;
+			border: 0 !important;
+		}
+
+		/* Remove any horizontal rule a theme places between header and
+		   content. */
+		body.dsb-plugin-page .site-content hr,
+		body.dsb-plugin-page .entry-content > hr:first-child,
+		body.dsb-plugin-page main > hr:first-child,
+		body.dsb-plugin-page .wp-site-blocks > hr { display: none !important; }
+
+		/* Break the plugin banner out of any centered wrapper so it
+		   spans the full viewport, flush to the top. */
+		body.dsb-plugin-page .dsb-app-header,
+		body.dsb-plugin-page .dsb-member-nav,
+		body.dsb-plugin-page .dsb-public-nav {
+			position: relative;
+			width: 100vw;
+			max-width: 100vw;
+			margin-left: calc(50% - 50vw);
+			margin-right: calc(50% - 50vw);
+			margin-top: 0 !important;
+		}
+
+		/* Fix: first select in the members directory (e.g. the gender
+		   filter) was clipping its text because the theme forces a
+		   small line-height. Give the filter selects enough vertical
+		   breathing room. */
+		body.dsb-plugin-page .dsb-directory-filters .dsb-filter,
+		body.dsb-plugin-page select.dsb-filter {
+			min-height: 44px !important;
+			height: auto !important;
+			line-height: 1.4 !important;
+			padding: 0.625rem 2rem 0.625rem 1rem !important;
+			box-sizing: border-box !important;
+			appearance: auto !important;
+			-webkit-appearance: auto !important;
+			-moz-appearance: auto !important;
+		}
+		';
+	}
+
+	/**
 	 * Enqueue frontend styles.
 	 */
 	public function enqueue_styles() {
 		wp_enqueue_style( 'dsb-public', DSB_PLUGIN_URL . 'public/css/dsb-public.css', array(), DSB_VERSION, 'all' );
-		
+
 		// Get the selected color theme and output theme-specific CSS variables
 		$theme_css = $this->get_theme_css_variables();
-		wp_add_inline_style( 'dsb-public', $theme_css );
+
+		// Get template style CSS
+		$template_css = $this->get_template_css();
+
+		// Full-width / hide-theme-title CSS (scoped via body.dsb-plugin-page
+		// so it only affects dating pages).
+		$full_width_css = $this->get_full_width_css();
+
+		wp_add_inline_style( 'dsb-public', $theme_css . $template_css . $full_width_css );
 	}
 
 	/**
@@ -115,17 +381,644 @@ class DSB_Frontend {
 	}
 
 	/**
+	 * Get template-specific CSS based on selected template style.
+	 */
+	private function get_template_css() {
+		$template = get_option( 'dsb_template_style', 'modern' );
+		
+		// Modern is the default - no additional CSS needed
+		if ( $template === 'modern' ) {
+			return '';
+		}
+		
+		$css = '';
+		
+		switch ( $template ) {
+			case 'glassmorphism':
+				$css = $this->get_glassmorphism_css();
+				break;
+			case 'minimalist':
+				$css = $this->get_minimalist_css();
+				break;
+			case 'bold_dark':
+				$css = $this->get_bold_dark_css();
+				break;
+		}
+		
+		return $css;
+	}
+
+	/**
+	 * Glassmorphism template CSS - frosted glass effects.
+	 */
+	private function get_glassmorphism_css() {
+		return '
+		/* Glassmorphism Template */
+		:root {
+			--dsb-glass-bg: rgba(255, 255, 255, 0.25);
+			--dsb-glass-border: rgba(255, 255, 255, 0.18);
+			--dsb-glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+		}
+		
+		/* Glass background for main content */
+		.dsb-app-content {
+			background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%) !important;
+			position: relative;
+		}
+		
+		.dsb-app-content::before {
+			content: "";
+			position: fixed;
+			top: 0;
+			left: 0;
+			right: 0;
+			bottom: 0;
+			background: 
+				radial-gradient(ellipse at 20% 20%, rgba(var(--dsb-primary-rgb, 255, 68, 88), 0.15) 0%, transparent 50%),
+				radial-gradient(ellipse at 80% 80%, rgba(var(--dsb-secondary-rgb, 139, 92, 246), 0.15) 0%, transparent 50%),
+				radial-gradient(ellipse at 50% 50%, rgba(var(--dsb-accent-rgb, 236, 72, 153), 0.1) 0%, transparent 60%);
+			pointer-events: none;
+			z-index: 0;
+		}
+		
+		/* Glassmorphic cards */
+		.dsb-member-card {
+			background: rgba(255, 255, 255, 0.7) !important;
+			backdrop-filter: blur(20px) !important;
+			-webkit-backdrop-filter: blur(20px) !important;
+			border: 1px solid rgba(255, 255, 255, 0.3) !important;
+			box-shadow: 0 8px 32px rgba(31, 38, 135, 0.1) !important;
+			border-radius: 24px !important;
+		}
+		
+		.dsb-member-card:hover {
+			box-shadow: 0 16px 48px rgba(31, 38, 135, 0.2) !important;
+			transform: translateY(-10px) scale(1.02) !important;
+		}
+		
+		.dsb-member-card-photo {
+			border-radius: 20px 20px 0 0 !important;
+		}
+		
+		/* Glass forms */
+		.dsb-form {
+			background: rgba(255, 255, 255, 0.6) !important;
+			backdrop-filter: blur(20px) !important;
+			-webkit-backdrop-filter: blur(20px) !important;
+			border: 1px solid rgba(255, 255, 255, 0.3) !important;
+			border-radius: 24px !important;
+		}
+		
+		/* Glass inputs */
+		.dsb-input {
+			background: rgba(255, 255, 255, 0.5) !important;
+			border: 1px solid rgba(255, 255, 255, 0.3) !important;
+			border-radius: 12px !important;
+			backdrop-filter: blur(10px) !important;
+		}
+		
+		.dsb-input:focus {
+			background: rgba(255, 255, 255, 0.7) !important;
+			border-color: var(--dsb-primary) !important;
+			box-shadow: 0 0 0 4px rgba(var(--dsb-primary-rgb, 255, 68, 88), 0.15) !important;
+		}
+		
+		/* Glass header */
+		.dsb-app-header {
+			background: rgba(255, 255, 255, 0.1) !important;
+			backdrop-filter: blur(20px) !important;
+			-webkit-backdrop-filter: blur(20px) !important;
+			border-bottom: 1px solid rgba(255, 255, 255, 0.2) !important;
+		}
+		
+		/* Glass buttons */
+		.dsb-btn-secondary {
+			background: rgba(255, 255, 255, 0.5) !important;
+			backdrop-filter: blur(10px) !important;
+			border: 1px solid rgba(255, 255, 255, 0.3) !important;
+		}
+		
+		/* Auth pages */
+		.dsb-auth-container {
+			background: rgba(255, 255, 255, 0.75) !important;
+			backdrop-filter: blur(25px) !important;
+			-webkit-backdrop-filter: blur(25px) !important;
+			border: 1px solid rgba(255, 255, 255, 0.3) !important;
+			border-radius: 32px !important;
+		}
+		
+		/* Glass message bubbles */
+		.dsb-message-bubble {
+			background: rgba(255, 255, 255, 0.7) !important;
+			backdrop-filter: blur(10px) !important;
+			border: 1px solid rgba(255, 255, 255, 0.3) !important;
+		}
+		
+		.dsb-message.sent .dsb-message-bubble {
+			background: var(--dsb-gradient-primary) !important;
+			border: none !important;
+		}
+		
+		/* Profile view */
+		.dsb-profile-view-wrapper {
+			background: rgba(255, 255, 255, 0.6) !important;
+			backdrop-filter: blur(20px) !important;
+			border-radius: 24px !important;
+			border: 1px solid rgba(255, 255, 255, 0.3) !important;
+		}
+		
+		/* Directory wrapper */
+		.dsb-member-directory-wrapper,
+		.dsb-matches-wrapper,
+		.dsb-likes-wrapper {
+			position: relative;
+			z-index: 1;
+		}
+		
+		/* Chat room glass */
+		.dsb-group-chat-wrapper {
+			background: rgba(255, 255, 255, 0.6) !important;
+			backdrop-filter: blur(20px) !important;
+			border: 1px solid rgba(255, 255, 255, 0.3) !important;
+			border-radius: 24px !important;
+		}
+		
+		.dsb-chat-message-bubble {
+			background: rgba(255, 255, 255, 0.8) !important;
+			backdrop-filter: blur(10px) !important;
+			border: 1px solid rgba(255, 255, 255, 0.3) !important;
+		}
+		';
+	}
+
+	/**
+	 * Minimalist template CSS - clean, flat design.
+	 */
+	private function get_minimalist_css() {
+		return '
+		/* Minimalist Template */
+		:root {
+			--dsb-radius: 4px !important;
+			--dsb-radius-lg: 8px !important;
+			--dsb-radius-xl: 12px !important;
+			--dsb-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+			--dsb-shadow-lg: 0 2px 6px rgba(0, 0, 0, 0.1);
+			--dsb-bg-main: #ffffff;
+		}
+		
+		/* Clean white background */
+		.dsb-app-content {
+			background: #ffffff !important;
+		}
+		
+		/* Flat header with thin border */
+		.dsb-app-header {
+			background: #ffffff !important;
+			box-shadow: none !important;
+			border-bottom: 1px solid #e5e5e5 !important;
+		}
+		
+		.dsb-app-header-inner {
+			background: #ffffff !important;
+		}
+		
+		.dsb-app-logo span {
+			color: #111111 !important;
+		}
+		
+		.dsb-app-nav-link {
+			color: #666666 !important;
+			background: transparent !important;
+			font-weight: 500 !important;
+		}
+		
+		.dsb-app-nav-link:hover,
+		.dsb-app-nav-link.active {
+			color: #111111 !important;
+			background: transparent !important;
+			text-decoration: underline !important;
+			text-underline-offset: 4px !important;
+		}
+		
+		.dsb-app-user-link {
+			color: #333333 !important;
+		}
+		
+		.dsb-app-logout {
+			color: #666666 !important;
+		}
+		
+		/* Flat cards with borders */
+		.dsb-member-card {
+			border-radius: 8px !important;
+			box-shadow: none !important;
+			border: 1px solid #e5e5e5 !important;
+			overflow: hidden;
+		}
+		
+		.dsb-member-card:hover {
+			transform: none !important;
+			box-shadow: none !important;
+			border-color: var(--dsb-primary) !important;
+		}
+		
+		.dsb-member-card-photo {
+			border-radius: 0 !important;
+		}
+		
+		/* Clean flat buttons */
+		.dsb-btn-primary {
+			background: var(--dsb-primary) !important;
+			background-image: none !important;
+			box-shadow: none !important;
+			border-radius: 4px !important;
+			font-weight: 500 !important;
+			text-transform: uppercase !important;
+			letter-spacing: 0.5px !important;
+			font-size: 0.8rem !important;
+		}
+		
+		.dsb-btn-primary:hover {
+			transform: none !important;
+			box-shadow: none !important;
+			filter: brightness(0.95) !important;
+		}
+		
+		.dsb-btn-secondary {
+			border-radius: 4px !important;
+			border-width: 1px !important;
+			box-shadow: none !important;
+		}
+		
+		/* Flat forms */
+		.dsb-form {
+			border-radius: 8px !important;
+			box-shadow: none !important;
+			border: 1px solid #e5e5e5 !important;
+		}
+		
+		.dsb-input {
+			border-radius: 4px !important;
+			border: 1px solid #d1d5db !important;
+			box-shadow: none !important;
+		}
+		
+		.dsb-input:focus {
+			border-color: var(--dsb-primary) !important;
+			box-shadow: none !important;
+			outline: 2px solid var(--dsb-primary) !important;
+			outline-offset: 1px !important;
+		}
+		
+		/* Auth pages - clean card */
+		.dsb-fullscreen-bg {
+			background: #f9fafb !important;
+			animation: none !important;
+			background-size: auto !important;
+		}
+		
+		.dsb-fullscreen-bg::before,
+		.dsb-fullscreen-bg::after {
+			display: none !important;
+		}
+		
+		.dsb-bg-overlay {
+			background: transparent !important;
+		}
+		
+		.dsb-auth-container {
+			background: #ffffff !important;
+			border-radius: 8px !important;
+			box-shadow: none !important;
+			border: 1px solid #e5e5e5 !important;
+			backdrop-filter: none !important;
+		}
+		
+		.dsb-logo {
+			animation: none !important;
+		}
+		
+		/* Messages - clean bubbles */
+		.dsb-message-bubble {
+			border-radius: 4px !important;
+			box-shadow: none !important;
+			border: 1px solid #e5e5e5 !important;
+		}
+		
+		.dsb-message.sent .dsb-message-bubble {
+			background: var(--dsb-primary) !important;
+			border: none !important;
+		}
+		
+		/* Match score - flat pill */
+		.dsb-match-score {
+			background: var(--dsb-primary) !important;
+			background-image: none !important;
+			border-radius: 4px !important;
+		}
+		
+		/* Profile sections */
+		.dsb-profile-view-wrapper {
+			box-shadow: none !important;
+			border: 1px solid #e5e5e5 !important;
+			border-radius: 8px !important;
+		}
+		
+		/* Chat room */
+		.dsb-group-chat-wrapper {
+			border-radius: 8px !important;
+			border: 1px solid #e5e5e5 !important;
+			box-shadow: none !important;
+		}
+		
+		.dsb-chat-message-bubble {
+			border-radius: 4px !important;
+		}
+		';
+	}
+
+	/**
+	 * Bold Dark template CSS - dark mode with vibrant accents.
+	 */
+	private function get_bold_dark_css() {
+		return '
+		/* Bold Dark Template */
+		:root {
+			--dsb-bg-main: #0a0a0a !important;
+			--dsb-bg-card: #161616 !important;
+			--dsb-text-primary: #ffffff !important;
+			--dsb-text-secondary: #a1a1aa !important;
+			--dsb-border: #27272a !important;
+			--dsb-radius: 16px;
+			--dsb-radius-lg: 24px;
+			--dsb-radius-xl: 32px;
+		}
+		
+		/* Dark background */
+		.dsb-app-content {
+			background: #0a0a0a !important;
+		}
+		
+		/* Dark header with gradient border */
+		.dsb-app-header {
+			background: linear-gradient(180deg, #161616 0%, #0a0a0a 100%) !important;
+			border-bottom: 1px solid #27272a !important;
+		}
+		
+		.dsb-app-header-inner {
+			background: transparent !important;
+		}
+		
+		/* Bold card style */
+		.dsb-member-card {
+			background: #161616 !important;
+			border-radius: 24px !important;
+			border: 1px solid #27272a !important;
+			box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4) !important;
+			overflow: hidden;
+		}
+		
+		.dsb-member-card:hover {
+			transform: translateY(-8px) scale(1.02) !important;
+			box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6), 0 0 0 1px var(--dsb-primary) !important;
+		}
+		
+		.dsb-member-card-photo {
+			border-radius: 20px 20px 0 0 !important;
+		}
+		
+		.dsb-member-card-info {
+			background: #161616 !important;
+		}
+		
+		.dsb-member-card h3 {
+			color: #ffffff !important;
+		}
+		
+		.dsb-member-card-meta {
+			color: #a1a1aa !important;
+		}
+		
+		/* Vibrant gradient buttons */
+		.dsb-btn-primary {
+			background: var(--dsb-gradient-primary) !important;
+			box-shadow: 0 4px 15px rgba(var(--dsb-primary-rgb, 255, 68, 88), 0.4) !important;
+			border-radius: 12px !important;
+			font-weight: 700 !important;
+		}
+		
+		.dsb-btn-primary:hover {
+			box-shadow: 0 6px 25px rgba(var(--dsb-primary-rgb, 255, 68, 88), 0.6) !important;
+			transform: translateY(-3px) !important;
+		}
+		
+		.dsb-btn-secondary {
+			background: #27272a !important;
+			border: 1px solid #3f3f46 !important;
+			color: #ffffff !important;
+			border-radius: 12px !important;
+		}
+		
+		.dsb-btn-secondary:hover {
+			background: #3f3f46 !important;
+			border-color: var(--dsb-primary) !important;
+		}
+		
+		/* Dark forms */
+		.dsb-form {
+			background: #161616 !important;
+			border: 1px solid #27272a !important;
+			border-radius: 24px !important;
+		}
+		
+		.dsb-form h2,
+		.dsb-form label {
+			color: #ffffff !important;
+		}
+		
+		.dsb-input {
+			background: #0a0a0a !important;
+			border: 1px solid #27272a !important;
+			color: #ffffff !important;
+			border-radius: 12px !important;
+		}
+		
+		.dsb-input::placeholder {
+			color: #71717a !important;
+		}
+		
+		.dsb-input:focus {
+			border-color: var(--dsb-primary) !important;
+			box-shadow: 0 0 0 3px rgba(var(--dsb-primary-rgb, 255, 68, 88), 0.3) !important;
+		}
+		
+		/* Auth pages - dark mode */
+		.dsb-fullscreen-bg {
+			background: radial-gradient(ellipse at center, #1a1a2e 0%, #0a0a0a 100%) !important;
+			background-size: 100% 100% !important;
+			animation: none !important;
+		}
+		
+		.dsb-fullscreen-bg::before,
+		.dsb-fullscreen-bg::after {
+			background: rgba(var(--dsb-primary-rgb, 255, 68, 88), 0.1) !important;
+		}
+		
+		.dsb-bg-overlay {
+			background: 
+				radial-gradient(circle at 20% 80%, rgba(var(--dsb-primary-rgb, 255, 68, 88), 0.15) 0%, transparent 40%),
+				radial-gradient(circle at 80% 20%, rgba(var(--dsb-secondary-rgb, 139, 92, 246), 0.15) 0%, transparent 40%) !important;
+		}
+		
+		.dsb-auth-container {
+			background: rgba(22, 22, 22, 0.95) !important;
+			border: 1px solid #27272a !important;
+			box-shadow: 0 25px 80px rgba(0, 0, 0, 0.6) !important;
+			border-radius: 32px !important;
+		}
+		
+		.dsb-auth-branding h1 {
+			color: #ffffff !important;
+		}
+		
+		.dsb-auth-branding p {
+			color: #a1a1aa !important;
+		}
+		
+		.dsb-auth-form .dsb-input {
+			background: #0a0a0a !important;
+			border: 1px solid #27272a !important;
+			color: #ffffff !important;
+		}
+		
+		.dsb-auth-footer,
+		.dsb-auth-footer a {
+			color: #a1a1aa !important;
+		}
+		
+		.dsb-auth-footer a:hover {
+			color: var(--dsb-primary) !important;
+		}
+		
+		/* Match score with glow */
+		.dsb-match-score {
+			box-shadow: 0 0 20px rgba(var(--dsb-primary-rgb, 255, 68, 88), 0.4) !important;
+			border-radius: 12px !important;
+		}
+		
+		/* Dark messages */
+		.dsb-messages-wrapper {
+			background: #0a0a0a !important;
+		}
+		
+		.dsb-message-bubble {
+			background: #27272a !important;
+			color: #ffffff !important;
+			border-radius: 16px !important;
+		}
+		
+		.dsb-message.sent .dsb-message-bubble {
+			background: var(--dsb-gradient-primary) !important;
+		}
+		
+		/* Profile page dark */
+		.dsb-profile-view-wrapper {
+			background: #161616 !important;
+			border: 1px solid #27272a !important;
+		}
+		
+		.dsb-profile-view-wrapper h2,
+		.dsb-profile-view-wrapper h3 {
+			color: #ffffff !important;
+		}
+		
+		.dsb-profile-view-wrapper p {
+			color: #a1a1aa !important;
+		}
+		
+		/* Directory headers */
+		.dsb-directory-header h2,
+		.dsb-matches-header h2 {
+			color: #ffffff !important;
+		}
+		
+		.dsb-directory-header p {
+			color: #a1a1aa !important;
+		}
+		
+		/* Filters dark */
+		.dsb-filter {
+			background: #161616 !important;
+			border: 1px solid #27272a !important;
+			color: #ffffff !important;
+		}
+		
+		/* Chat room dark */
+		.dsb-group-chat-wrapper {
+			background: #161616 !important;
+			border: 1px solid #27272a !important;
+		}
+		
+		.dsb-chat-header {
+			background: #0a0a0a !important;
+			border-bottom: 1px solid #27272a !important;
+			color: #ffffff !important;
+		}
+		
+		.dsb-chat-messages {
+			background: #0a0a0a !important;
+		}
+		
+		.dsb-chat-message-bubble {
+			background: #27272a !important;
+			color: #ffffff !important;
+		}
+		
+		.dsb-chat-message.own .dsb-chat-message-bubble {
+			background: var(--dsb-gradient-primary) !important;
+		}
+		
+		.dsb-chat-message-username a {
+			color: #ffffff !important;
+		}
+		
+		.dsb-chat-message-time {
+			color: #71717a !important;
+		}
+		
+		.dsb-chat-input-area {
+			background: #161616 !important;
+			border-top: 1px solid #27272a !important;
+		}
+		
+		.dsb-online-sidebar {
+			background: #161616 !important;
+			border-left: 1px solid #27272a !important;
+		}
+		
+		.dsb-online-header {
+			color: #ffffff !important;
+		}
+		
+		.dsb-online-user-name {
+			color: #ffffff !important;
+		}
+		';
+	}
+
+	/**
 	 * Enqueue frontend scripts.
 	 */
 	public function enqueue_scripts() {
 		wp_enqueue_script( 'dsb-public', DSB_PLUGIN_URL . 'public/js/dsb-public.js', array( 'jquery' ), DSB_VERSION, true );
 		
 		wp_localize_script( 'dsb-public', 'dsbPublic', array(
-			'ajaxurl'          => admin_url( 'admin-ajax.php' ),
-			'nonce'            => wp_create_nonce( 'dsb_public_nonce' ),
-			'messaging_nonce'  => wp_create_nonce( 'dsb_messaging_nonce' ),
-			'current_user_id'  => get_current_user_id(),
-			'strings'          => array(
+			'ajaxurl'           => admin_url( 'admin-ajax.php' ),
+			'nonce'             => wp_create_nonce( 'dsb_public_nonce' ),
+			'messaging_nonce'   => wp_create_nonce( 'dsb_messaging_nonce' ),
+			'group_chat_nonce'  => wp_create_nonce( 'dsb_group_chat_nonce' ),
+			'current_user_id'   => get_current_user_id(),
+			'strings'           => array(
 				'confirm_delete' => __( 'Are you sure you want to delete this photo?', 'dating-site-builder' ),
 				'confirm_block'  => __( 'Are you sure you want to block this user?', 'dating-site-builder' ),
 			),
@@ -147,6 +1040,7 @@ class DSB_Frontend {
 		add_shortcode( 'dsb_likes', array( $this, 'shortcode_likes' ) );
 		add_shortcode( 'dsb_logout', array( $this, 'shortcode_logout' ) );
 		add_shortcode( 'dsb_member_nav', array( $this, 'shortcode_member_nav' ) );
+		add_shortcode( 'dsb_group_chat', array( $this, 'shortcode_group_chat' ) );
 	}
 
 	/**
@@ -239,6 +1133,14 @@ class DSB_Frontend {
 	}
 
 	/**
+	 * Get the dating site name.
+	 */
+	private function get_site_name() {
+		$site_name = get_option( 'dsb_site_name', '' );
+		return ! empty( $site_name ) ? $site_name : get_bloginfo( 'name' );
+	}
+
+	/**
 	 * Render the app header for member pages.
 	 */
 	private function render_app_header( $active_page = '' ) {
@@ -254,12 +1156,23 @@ class DSB_Frontend {
 		<header class="dsb-app-header">
 			<div class="dsb-app-header-inner">
 				<a href="<?php echo esc_url( get_permalink( get_option( 'dsb_member_directory_page' ) ) ); ?>" class="dsb-app-logo">
-					<span class="dsb-app-logo-icon">💕</span>
-					<span><?php echo esc_html( get_bloginfo( 'name' ) ); ?></span>
+					<?php
+					$dsb_logo_id  = (int) get_option( 'dsb_site_logo', 0 );
+					$dsb_logo_url = $dsb_logo_id ? wp_get_attachment_image_url( $dsb_logo_id, 'medium' ) : '';
+					if ( $dsb_logo_url ) :
+					?>
+						<img class="dsb-app-logo-img" src="<?php echo esc_url( $dsb_logo_url ); ?>" alt="<?php echo esc_attr( $this->get_site_name() ); ?>">
+					<?php else : ?>
+						<span class="dsb-app-logo-icon">💕</span>
+					<?php endif; ?>
+					<span><?php echo esc_html( $this->get_site_name() ); ?></span>
 				</a>
 				<nav class="dsb-app-nav">
 					<a href="<?php echo esc_url( get_permalink( get_option( 'dsb_member_directory_page' ) ) ); ?>" class="dsb-app-nav-link <?php echo $active_page === 'browse' ? 'active' : ''; ?>">
 						<?php _e( 'Browse', 'dating-site-builder' ); ?>
+					</a>
+					<a href="<?php echo esc_url( get_permalink( get_option( 'dsb_group_chat_page' ) ) ); ?>" class="dsb-app-nav-link <?php echo $active_page === 'chat' ? 'active' : ''; ?>">
+						<?php _e( 'Chat', 'dating-site-builder' ); ?>
 					</a>
 					<a href="<?php echo esc_url( get_permalink( get_option( 'dsb_matches_page' ) ) ); ?>" class="dsb-app-nav-link <?php echo $active_page === 'matches' ? 'active' : ''; ?>">
 						<?php _e( 'Matches', 'dating-site-builder' ); ?>
@@ -323,8 +1236,8 @@ class DSB_Frontend {
 			<div class="dsb-fullscreen-content">
 				<div class="dsb-auth-container">
 					<div class="dsb-auth-branding">
-						<div class="dsb-logo">🔐</div>
-						<h1><?php echo esc_html( get_bloginfo( 'name' ) ); ?></h1>
+						<?php echo $this->render_auth_logo( '🔐' ); ?>
+						<h1><?php echo esc_html( $this->get_site_name() ); ?></h1>
 						<p><?php _e( 'Reset your password', 'dating-site-builder' ); ?></p>
 					</div>
 					<form id="dsb-forgot-password-form" class="dsb-auth-form">
@@ -385,8 +1298,8 @@ class DSB_Frontend {
 			<div class="dsb-fullscreen-content">
 				<div class="dsb-auth-container dsb-register-container">
 					<div class="dsb-auth-branding">
-						<div class="dsb-logo">💕</div>
-						<h1><?php echo esc_html( get_bloginfo( 'name' ) ); ?></h1>
+						<?php echo $this->render_auth_logo( '💕' ); ?>
+						<h1><?php echo esc_html( $this->get_site_name() ); ?></h1>
 						<p><?php _e( 'Start your love story today', 'dating-site-builder' ); ?></p>
 					</div>
 					<form id="dsb-register-form" class="dsb-auth-form">
@@ -445,7 +1358,7 @@ class DSB_Frontend {
 							<span><?php _e( 'Already a member?', 'dating-site-builder' ); ?></span>
 						</div>
 
-						<a href="<?php echo esc_url( get_permalink( get_option( 'dsb_login_page' ) ) ); ?>" class="dsb-btn dsb-btn-outline dsb-btn-large">
+						<a href="<?php echo esc_url( $this->get_dsb_page_url( 'dsb_login_page', 'login' ) ); ?>" class="dsb-btn dsb-btn-outline dsb-btn-large">
 							<?php _e( 'Sign In', 'dating-site-builder' ); ?>
 						</a>
 					</form>
@@ -457,19 +1370,103 @@ class DSB_Frontend {
 	}
 
 	/**
+	 * Resolve a plugin page URL safely.
+	 *
+	 * Falls back to `get_page_by_path( $slug )` when the option is
+	 * empty or points at a missing post, and finally to the site
+	 * home URL. Prevents the old behaviour where `get_permalink(0)`
+	 * silently returned the current page URL and produced links that
+	 * looped back to themselves.
+	 *
+	 * @param string $option_name dsb_*_page option to read.
+	 * @param string $slug        Page slug to look up as a fallback.
+	 * @return string
+	 */
+	public function get_dsb_page_url( $option_name, $slug ) {
+		$page_id = (int) get_option( $option_name );
+		if ( $page_id ) {
+			$post = get_post( $page_id );
+			if ( $post && 'trash' !== $post->post_status ) {
+				$url = get_permalink( $page_id );
+				if ( $url ) {
+					return (string) $url;
+				}
+			}
+		}
+
+		$fallback = get_page_by_path( $slug );
+		if ( $fallback && 'trash' !== $fallback->post_status ) {
+			$url = get_permalink( $fallback->ID );
+			if ( $url ) {
+				return (string) $url;
+			}
+		}
+
+		return home_url( '/' . ltrim( $slug, '/' ) . '/' );
+	}
+
+	/**
+	 * Render the branding logo for the full-screen auth pages
+	 * (login, register, forgot-password).
+	 *
+	 * If the admin has uploaded a Site Logo via the wizard, that
+	 * image is shown. Otherwise we fall back to the page-specific
+	 * emoji that was previously hard-coded.
+	 *
+	 * @param string $emoji_fallback Emoji or text shown when no logo.
+	 * @return string HTML.
+	 */
+	private function render_auth_logo( $emoji_fallback = '💕' ) {
+		$logo_id  = (int) get_option( 'dsb_site_logo', 0 );
+		$logo_url = $logo_id ? wp_get_attachment_image_url( $logo_id, 'medium' ) : '';
+
+		if ( $logo_url ) {
+			return '<div class="dsb-logo dsb-logo-has-image">'
+				. '<img class="dsb-logo-img" src="' . esc_url( $logo_url ) . '" alt="' . esc_attr( $this->get_site_name() ) . '">'
+				. '</div>';
+		}
+
+		return '<div class="dsb-logo">' . $emoji_fallback . '</div>';
+	}
+
+	/**
 	 * Login form shortcode.
 	 */
 	public function shortcode_login( $atts ) {
 		if ( is_user_logged_in() ) {
-			// Redirect logged-in users to Browse Members
-			$dashboard_url = get_permalink( get_option( 'dsb_member_directory_page' ) );
-			if ( $dashboard_url && ! headers_sent() ) {
-				wp_redirect( $dashboard_url );
-				exit;
+			// Redirect logged-in users to Browse Members, but never to
+			// ourselves – that would create an infinite redirect loop if
+			// the option is missing or mis-configured.
+			$directory_id   = (int) get_option( 'dsb_member_directory_page' );
+			$login_page_id  = (int) get_option( 'dsb_login_page' );
+			$current_id     = (int) get_queried_object_id();
+			$dashboard_url  = $directory_id ? get_permalink( $directory_id ) : '';
+
+			$is_same_page = (
+				! $directory_id
+				|| $directory_id === $login_page_id
+				|| $directory_id === $current_id
+				|| empty( $dashboard_url )
+				|| trailingslashit( $dashboard_url ) === trailingslashit( ( is_ssl() ? 'https://' : 'http://' ) . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'] )
+			);
+
+			if ( ! $is_same_page ) {
+				if ( ! headers_sent() ) {
+					wp_safe_redirect( $dashboard_url );
+					exit;
+				}
+				return '<script>window.location.href = "' . esc_url( $dashboard_url ) . '";</script>
+					<p>' . sprintf( __( 'Redirecting... <a href="%s">Click here</a> if not redirected.', 'dating-site-builder' ), esc_url( $dashboard_url ) ) . '</p>';
 			}
-			// Fallback: JavaScript redirect if headers already sent
-			return '<script>window.location.href = "' . esc_url( $dashboard_url ) . '";</script>
-				<p>' . sprintf( __( 'Redirecting... <a href="%s">Click here</a> if not redirected.', 'dating-site-builder' ), esc_url( $dashboard_url ) ) . '</p>';
+
+			// Same-page fallback: don't redirect, show a friendly link
+			// so the user can always escape this page.
+			$fallback_url = $dashboard_url ? $dashboard_url : home_url( '/' );
+			return '<p>' . sprintf(
+				__( 'You are already logged in. <a href="%s">Continue</a> or <a href="%s">log out</a>.', 'dating-site-builder' ),
+				esc_url( $fallback_url ),
+				esc_url( wp_logout_url( home_url() ) )
+			) . '</p>';
 		}
 
 		// Add fullscreen body class
@@ -487,8 +1484,8 @@ class DSB_Frontend {
 			<div class="dsb-fullscreen-content">
 				<div class="dsb-auth-container">
 					<div class="dsb-auth-branding">
-						<div class="dsb-logo">💕</div>
-						<h1><?php echo esc_html( get_bloginfo( 'name' ) ); ?></h1>
+						<?php echo $this->render_auth_logo( '💕' ); ?>
+						<h1><?php echo esc_html( $this->get_site_name() ); ?></h1>
 						<p><?php _e( 'Find your perfect match today', 'dating-site-builder' ); ?></p>
 					</div>
 					<form id="dsb-login-form" class="dsb-auth-form">
@@ -525,7 +1522,7 @@ class DSB_Frontend {
 							<span><?php _e( 'New here?', 'dating-site-builder' ); ?></span>
 						</div>
 
-						<a href="<?php echo esc_url( get_permalink( get_option( 'dsb_register_page' ) ) ); ?>" class="dsb-btn dsb-btn-outline dsb-btn-large">
+						<a href="<?php echo esc_url( $this->get_dsb_page_url( 'dsb_register_page', 'register' ) ); ?>" class="dsb-btn dsb-btn-outline dsb-btn-large">
 							<?php _e( 'Create Free Account', 'dating-site-builder' ); ?>
 						</a>
 					</form>
@@ -1267,9 +2264,9 @@ class DSB_Frontend {
 		// Auto-login if email verification is not required
 		if ( ! get_option( 'dsb_require_email_verification', false ) ) {
 			wp_set_auth_cookie( $user_id );
-			$redirect_url = get_permalink( get_option( 'dsb_profile_edit_page' ) );
+			$redirect_url = $this->get_dsb_page_url( 'dsb_profile_edit_page', 'profile-edit' );
 		} else {
-			$redirect_url = get_permalink( get_option( 'dsb_login_page' ) );
+			$redirect_url = $this->get_dsb_page_url( 'dsb_login_page', 'login' );
 		}
 
 		wp_send_json_success( array(
@@ -1300,7 +2297,7 @@ class DSB_Frontend {
 			wp_send_json_error( array( 'message' => __( 'Invalid username or password.', 'dating-site-builder' ) ) );
 		}
 
-		$redirect_url = get_permalink( get_option( 'dsb_member_directory_page' ) );
+		$redirect_url = $this->get_dsb_page_url( 'dsb_member_directory_page', 'members' );
 
 		wp_send_json_success( array(
 			'message'      => __( 'Login successful!', 'dating-site-builder' ),
@@ -1546,5 +2543,78 @@ class DSB_Frontend {
 		}
 
 		wp_send_json_success();
+	}
+
+	/**
+	 * Group chat shortcode.
+	 */
+	public function shortcode_group_chat( $atts ) {
+		if ( ! is_user_logged_in() ) {
+			return '<p>' . __( 'You must be logged in to access the chat room.', 'dating-site-builder' ) . '</p>';
+		}
+
+		$this->add_member_page_class();
+
+		// Update user's last activity for online status
+		update_user_meta( get_current_user_id(), 'dsb_last_activity', current_time( 'mysql' ) );
+
+		$user = wp_get_current_user();
+		$photos = get_user_meta( get_current_user_id(), 'dsb_photos', true );
+		$avatar = ! empty( $photos ) && is_array( $photos ) ? $photos[0] : get_avatar_url( get_current_user_id(), array( 'size' => 40 ) );
+
+		ob_start();
+		echo $this->render_app_header( 'chat' );
+		?>
+		<div class="dsb-app-content">
+			<div class="dsb-group-chat-wrapper">
+				<div class="dsb-chat-container">
+					<div class="dsb-chat-header">
+						<div class="dsb-chat-title">
+							<h2>💬 <?php _e( 'Community Chat', 'dating-site-builder' ); ?></h2>
+							<p><?php _e( 'Chat with all members in real-time', 'dating-site-builder' ); ?></p>
+						</div>
+						<div class="dsb-chat-online">
+							<span class="dsb-online-indicator"></span>
+							<span id="dsb-online-count">0</span> <?php _e( 'online', 'dating-site-builder' ); ?>
+						</div>
+					</div>
+
+					<div class="dsb-chat-messages" id="dsb-chat-messages">
+						<div class="dsb-chat-loading">
+							<div class="dsb-spinner"></div>
+							<?php _e( 'Loading messages...', 'dating-site-builder' ); ?>
+						</div>
+					</div>
+
+					<div class="dsb-chat-input-wrapper">
+						<form id="dsb-group-chat-form" class="dsb-chat-form">
+							<div class="dsb-chat-user-avatar">
+								<img src="<?php echo esc_url( $avatar ); ?>" alt="<?php echo esc_attr( $user->display_name ); ?>">
+							</div>
+							<div class="dsb-chat-input-container">
+								<input type="text" id="dsb-chat-input" name="message" placeholder="<?php esc_attr_e( 'Type your message...', 'dating-site-builder' ); ?>" maxlength="1000" autocomplete="off" />
+								<button type="submit" class="dsb-chat-send-btn" id="dsb-chat-send">
+									<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="24" height="24">
+										<path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+									</svg>
+								</button>
+							</div>
+						</form>
+					</div>
+				</div>
+
+				<div class="dsb-chat-sidebar">
+					<div class="dsb-chat-sidebar-header">
+						<h3><?php _e( 'Online Members', 'dating-site-builder' ); ?></h3>
+					</div>
+					<div class="dsb-online-users" id="dsb-online-users">
+						<!-- Online users will be populated via JS -->
+					</div>
+				</div>
+			</div>
+		</div>
+		</div><!-- .dsb-app-content -->
+		<?php
+		return ob_get_clean();
 	}
 }

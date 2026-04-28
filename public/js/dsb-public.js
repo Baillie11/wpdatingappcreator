@@ -21,6 +21,7 @@
 			this.blockUser();
 			this.reportUser();
 			this.filters();
+			this.groupChat();
 		},
 
 		/**
@@ -73,7 +74,12 @@
 					if (response.success) {
 						DSB.showMessage($message, response.data.message, 'success');
 						setTimeout(function() {
-							window.location.href = response.data.redirect_url;
+							const target = response.data && response.data.redirect_url;
+							if (typeof target === 'string' && target.length > 0) {
+								window.location.href = target;
+							} else {
+								window.location.href = '/';
+							}
 						}, 1000);
 					} else {
 						DSB.showMessage($message, response.data.message, 'error');
@@ -114,7 +120,12 @@
 					if (response.success) {
 						DSB.showMessage($message, response.data.message, 'success');
 						setTimeout(function() {
-							window.location.href = response.data.redirect_url;
+							const target = response.data && response.data.redirect_url;
+							if (typeof target === 'string' && target.length > 0) {
+								window.location.href = target;
+							} else {
+								window.location.href = '/';
+							}
 						}, 1000);
 					} else {
 						DSB.showMessage($message, response.data.message, 'error');
@@ -547,6 +558,202 @@
 					$('#dsb-apply-filters').click();
 				}
 			});
+		},
+
+		/**
+		 * Group chat functionality
+		 */
+		groupChat: function() {
+			const $chatContainer = $('#dsb-chat-messages');
+			if ($chatContainer.length === 0) return;
+			
+			let lastMessageId = 0;
+			let isPolling = true;
+			let pollInterval = null;
+			let onlineInterval = null;
+			
+			// Load initial messages
+			loadMessages();
+			
+			// Load online users
+			loadOnlineUsers();
+			
+			// Start polling for new messages
+			pollInterval = setInterval(function() {
+				if (isPolling) {
+					loadMessages();
+				}
+			}, 3000); // Poll every 3 seconds
+			
+			// Update online users every 30 seconds
+			onlineInterval = setInterval(loadOnlineUsers, 30000);
+			
+			// Send message form
+			$('#dsb-group-chat-form').on('submit', function(e) {
+				e.preventDefault();
+				
+				const $input = $('#dsb-chat-input');
+				const $button = $('#dsb-chat-send');
+				const message = $input.val().trim();
+				
+				if (message === '') return;
+				
+				$button.prop('disabled', true);
+				
+				$.post(dsbPublic.ajaxurl, {
+					action: 'dsb_group_chat_send',
+					nonce: dsbPublic.group_chat_nonce,
+					message: message
+				}, function(response) {
+					if (response.success) {
+						$input.val('');
+						
+						// Add message immediately for instant feedback
+						appendMessage({
+							id: response.data.message_id,
+							user_id: response.data.user_id,
+							username: response.data.username,
+							avatar: response.data.avatar,
+							message: response.data.message,
+							time: response.data.time,
+							is_own: true
+						});
+						
+						lastMessageId = response.data.message_id;
+						scrollToBottom();
+					} else {
+						alert(response.data.message || 'Failed to send message');
+					}
+					$button.prop('disabled', false);
+				}).fail(function() {
+					alert('Failed to send message. Please try again.');
+					$button.prop('disabled', false);
+				});
+			});
+			
+			// Allow Enter key to send (Shift+Enter for new line in future)
+			$('#dsb-chat-input').on('keypress', function(e) {
+				if (e.which === 13 && !e.shiftKey) {
+					e.preventDefault();
+					$('#dsb-group-chat-form').submit();
+				}
+			});
+			
+			/**
+			 * Load messages from server
+			 */
+			function loadMessages() {
+				$.post(dsbPublic.ajaxurl, {
+					action: 'dsb_group_chat_get',
+					nonce: dsbPublic.group_chat_nonce,
+					last_id: lastMessageId,
+					limit: lastMessageId === 0 ? 50 : 20
+				}, function(response) {
+					if (response.success) {
+						const messages = response.data.messages;
+						
+						// Remove loading indicator on first load
+						if (lastMessageId === 0) {
+							$chatContainer.find('.dsb-chat-loading').remove();
+							
+							if (messages.length === 0) {
+								$chatContainer.html('<div class="dsb-no-messages" style="text-align:center;padding:40px;color:#6b7280;">No messages yet. Be the first to say hello! 👋</div>');
+							}
+						}
+						
+						// Append new messages
+						messages.forEach(function(msg) {
+							// Skip if message already exists
+							if ($chatContainer.find('[data-message-id="' + msg.id + '"]').length === 0) {
+								// Remove "no messages" placeholder
+								$chatContainer.find('.dsb-no-messages').remove();
+								appendMessage(msg);
+							}
+						});
+						
+						// Update last message ID
+						if (response.data.last_id > lastMessageId) {
+							lastMessageId = response.data.last_id;
+						}
+						
+						// Scroll to bottom on initial load
+						if (messages.length > 0 && lastMessageId === response.data.last_id) {
+							scrollToBottom();
+						}
+					}
+				});
+			}
+			
+			/**
+			 * Append a message to the chat
+			 */
+			function appendMessage(msg) {
+				const ownClass = msg.is_own ? ' own' : '';
+				const profileUrl = msg.profile_url || '#';
+				
+				const html = `
+					<div class="dsb-chat-message${ownClass}" data-message-id="${msg.id}">
+						<div class="dsb-chat-message-avatar">
+							<a href="${escapeHtml(profileUrl)}">
+								<img src="${escapeHtml(msg.avatar)}" alt="${escapeHtml(msg.username)}">
+							</a>
+						</div>
+						<div class="dsb-chat-message-content">
+							<div class="dsb-chat-message-header">
+								<span class="dsb-chat-message-username">
+									<a href="${escapeHtml(profileUrl)}">${escapeHtml(msg.username)}</a>
+								</span>
+								<span class="dsb-chat-message-time">${escapeHtml(msg.time)}</span>
+							</div>
+							<div class="dsb-chat-message-bubble">${escapeHtml(msg.message)}</div>
+						</div>
+					</div>
+				`;
+				
+				$chatContainer.append(html);
+			}
+			
+			/**
+			 * Load online users
+			 */
+			function loadOnlineUsers() {
+				$.post(dsbPublic.ajaxurl, {
+					action: 'dsb_group_chat_online',
+					nonce: dsbPublic.group_chat_nonce
+				}, function(response) {
+					if (response.success) {
+						const users = response.data.users;
+						const count = response.data.count;
+						
+						// Update online count
+						$('#dsb-online-count').text(count);
+						
+						// Update online users list
+						const $onlineList = $('#dsb-online-users');
+						$onlineList.empty();
+						
+						if (users.length === 0) {
+							$onlineList.html('<div class="dsb-no-online-users">No members online</div>');
+						} else {
+							users.forEach(function(user) {
+								$onlineList.append(`
+									<a href="#" class="dsb-online-user">
+										<img src="${escapeHtml(user.avatar)}" alt="${escapeHtml(user.username)}" class="dsb-online-user-avatar">
+										<span class="dsb-online-user-name">${escapeHtml(user.username)}</span>
+									</a>
+								`);
+							});
+						}
+					}
+				});
+			}
+			
+			/**
+			 * Scroll chat to bottom
+			 */
+			function scrollToBottom() {
+				$chatContainer.scrollTop($chatContainer[0].scrollHeight);
+			}
 		}
 	};
 

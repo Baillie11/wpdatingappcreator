@@ -33,10 +33,12 @@ class DSB_Core {
 		require_once DSB_PLUGIN_DIR . 'includes/class-dsb-matching.php';
 		require_once DSB_PLUGIN_DIR . 'includes/class-dsb-messaging.php';
 		require_once DSB_PLUGIN_DIR . 'includes/class-dsb-likes.php';
-		
+		require_once DSB_PLUGIN_DIR . 'includes/class-dsb-group-chat.php';
+
 		// Admin classes
 		require_once DSB_PLUGIN_DIR . 'includes/class-dsb-admin.php';
-		
+		require_once DSB_PLUGIN_DIR . 'includes/class-dsb-activator.php';
+
 		// Public classes
 		require_once DSB_PLUGIN_DIR . 'includes/class-dsb-frontend.php';
 
@@ -69,7 +71,28 @@ class DSB_Core {
 
 		$this->loader->add_action( 'wp_enqueue_scripts', $plugin_public, 'enqueue_styles' );
 		$this->loader->add_action( 'wp_enqueue_scripts', $plugin_public, 'enqueue_scripts' );
-		
+
+		// Run any pending data migrations for existing installs that were
+		// upgraded by simply replacing plugin files (no re-activation).
+		$this->loader->add_action( 'plugins_loaded', 'DSB_Activator', 'run_migrations' );
+
+		// Hide the Login page from front-end menus when the user is
+		// already logged in. Two filters cover both the theme's page menu
+		// fallback and any custom nav menu the site owner may build.
+		$this->loader->add_filter( 'get_pages', $plugin_public, 'filter_pages_hide_login' );
+		$this->loader->add_filter( 'wp_get_nav_menu_items', $plugin_public, 'filter_nav_menu_items_hide_login' );
+
+		// Suppress the theme's own page/nav menu output on pages rendered
+		// by this plugin's shortcodes. The plugin ships its own top
+		// navigation bar so the theme's menu would just duplicate it.
+		$this->loader->add_filter( 'wp_page_menu', $plugin_public, 'filter_hide_theme_page_menu' );
+		$this->loader->add_filter( 'pre_wp_nav_menu', $plugin_public, 'filter_hide_theme_nav_menu' );
+
+		// Tag plugin pages with a body class and suppress the theme's
+		// page title so the plugin banner sits flush at the top.
+		$this->loader->add_filter( 'body_class', $plugin_public, 'filter_body_class_dsb_page' );
+		$this->loader->add_filter( 'the_title', $plugin_public, 'filter_remove_page_title', 10, 2 );
+
 		// Register shortcodes
 		$this->loader->add_action( 'init', $plugin_public, 'register_shortcodes' );
 		
@@ -100,6 +123,12 @@ class DSB_Core {
 		$likes = new DSB_Likes();
 		$this->loader->add_action( 'wp_ajax_dsb_toggle_like', $likes, 'ajax_toggle_like' );
 		$this->loader->add_action( 'wp_ajax_dsb_get_likes', $likes, 'ajax_get_likes' );
+		
+		// Group Chat AJAX
+		$group_chat = new DSB_Group_Chat();
+		$this->loader->add_action( 'wp_ajax_dsb_group_chat_send', $group_chat, 'ajax_send_message' );
+		$this->loader->add_action( 'wp_ajax_dsb_group_chat_get', $group_chat, 'ajax_get_messages' );
+		$this->loader->add_action( 'wp_ajax_dsb_group_chat_online', $group_chat, 'ajax_get_online_users' );
 	}
 
 	/**

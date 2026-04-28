@@ -17,9 +17,248 @@ class DSB_Activator {
 		self::add_custom_roles();
 		self::set_default_options();
 		self::schedule_events();
-		
+		self::run_migrations();
+
 		// Flush rewrite rules
 		flush_rewrite_rules();
+	}
+
+	/**
+	 * Run any pending data migrations.
+	 *
+	 * Executed on activation and also on every request via a
+	 * `plugins_loaded` hook so existing installs upgrade automatically
+	 * when the plugin files are updated without re-activation.
+	 */
+	public static function run_migrations() {
+		$current = get_option( 'dsb_db_version', '1.0' );
+
+		if ( version_compare( $current, '1.1', '<' ) ) {
+			self::migrate_reparent_profile_children();
+			update_option( 'dsb_db_version', '1.1' );
+		}
+
+		if ( version_compare( $current, '1.2', '<' ) ) {
+			self::migrate_ensure_plugin_pages();
+			update_option( 'dsb_db_version', '1.2' );
+		}
+
+		if ( version_compare( $current, '1.3', '<' ) ) {
+			self::migrate_dedupe_plugin_shortcodes();
+			update_option( 'dsb_db_version', '1.3' );
+		}
+	}
+
+	/**
+	 * Migration: make sure every page the plugin relies on exists,
+	 * carries its expected shortcode content, and has its option ID
+	 * pointing at the correct post. Self-heals situations where:
+	 *   - the dsb_*_page option was cleared or deleted
+	 *   - the option points at a post that was trashed
+	 *   - the page content was edited and no longer contains the
+	 *     required shortcode (so links kept bouncing back to Login).
+	 */
+	public static function migrate_ensure_plugin_pages() {
+		$pages = array(
+			'register'        => array( 'title' => 'Register',          'shortcode' => 'dsb_register',        'option' => 'dsb_register_page' ),
+			'login'           => array( 'title' => 'Login',             'shortcode' => 'dsb_login',           'option' => 'dsb_login_page' ),
+			'profile'         => array( 'title' => 'My Profile',        'shortcode' => 'dsb_profile_view',    'option' => 'dsb_profile_view_page' ),
+			'forgot-password' => array( 'title' => 'Forgot Password',   'shortcode' => 'dsb_forgot_password', 'option' => 'dsb_forgot_password_page', 'parent' => 'dsb_profile_view_page' ),
+			'profile-edit'    => array( 'title' => 'Edit Profile',      'shortcode' => 'dsb_profile_edit',    'option' => 'dsb_profile_edit_page',    'parent' => 'dsb_profile_view_page' ),
+			'members'         => array( 'title' => 'Browse Members',    'shortcode' => 'dsb_member_directory','option' => 'dsb_member_directory_page' ),
+			'matches'         => array( 'title' => 'Your Matches',      'shortcode' => 'dsb_matches',         'option' => 'dsb_matches_page' ),
+			'messages'        => array( 'title' => 'Messages',          'shortcode' => 'dsb_messages',        'option' => 'dsb_messages_page' ),
+			'likes'           => array( 'title' => 'Likes & Favorites', 'shortcode' => 'dsb_likes',           'option' => 'dsb_likes_page',           'parent' => 'dsb_profile_view_page' ),
+			'chat'            => array( 'title' => 'Community Chat',    'shortcode' => 'dsb_group_chat',      'option' => 'dsb_group_chat_page' ),
+		);
+
+		// First pass: ensure each page exists and its option is set to
+		// a published post whose content contains the expected shortcode.
+		foreach ( $pages as $slug => $spec ) {
+			$content  = '[' . $spec['shortcode'] . ']';
+			$option   = $spec['option'];
+			$page_id  = (int) get_option( $option );
+			$existing = $page_id ? get_post( $page_id ) : null;
+
+			// If the stored ID is missing or the post was trashed /
+			// deleted, look up by slug as a fallback.
+			if ( ! $existing || 'page' !== $existing->post_type || 'trash' === $existing->post_status ) {
+				$found = get_page_by_path( $slug );
+				if ( $found && 'page' === $found->post_type && 'trash' !== $found->post_status ) {
+					$existing = $found;
+					$page_id  = $existing->ID;
+				}
+			}
+
+			if ( ! $existing ) {
+				// Recreate the missing page.
+				$page_id = wp_insert_post( array(
+					'post_title'   => $spec['title'],
+					'post_content' => $content,
+					'post_status'  => 'publish',
+					'post_type'    => 'page',
+					'post_name'    => $slug,
+				) );
+				if ( is_wp_error( $page_id ) || ! $page_id ) {
+					continue;
+				}
+			} else {
+				// Ensure the page is published and still contains its
+				// required shortcode.
+				//
+				// NOTE: we deliberately use a regex string check rather
+				// than has_shortcode(). has_shortcode() returns false
+				// when the shortcode tag isn't registered yet, and this
+				// migration runs on plugins_loaded which fires before
+				// `init` (where dsb_* shortcodes are registered). Using
+				// has_shortcode() here previously caused the plugin to
+				// double-up shortcodes on every page.
+				$updates = array();
+				if ( 'publish' !== $existing->post_status ) {
+					$updates['post_status'] = 'publish';
+				}
+				if ( ! self::content_contains_shortcode( (string) $existing->post_content, $spec['shortcode'] ) ) {
+					$updates['post_content'] = trim( $existing->post_content . "\n\n" . $content );
+				}
+				if ( ! empty( $updates ) ) {
+					$updates['ID'] = $existing->ID;
+					wp_update_post( $updates );
+				}
+			}
+
+			update_option( $option, (int) $page_id );
+		}
+
+		// Second pass: re-assert parent/child relationships (in case
+		// the earlier 1.1 migration ran before the page existed).
+		foreach ( $pages as $slug => $spec ) {
+			if ( empty( $spec['parent'] ) ) {
+				continue;
+			}
+			$child_id  = (int) get_option( $spec['option'] );
+			$parent_id = (int) get_option( $spec['parent'] );
+			if ( ! $child_id || ! $parent_id ) {
+				continue;
+			}
+			$child = get_post( $child_id );
+			if ( $child && (int) $child->post_parent !== $parent_id ) {
+				wp_update_post( array(
+					'ID'          => $child_id,
+					'post_parent' => $parent_id,
+				) );
+			}
+		}
+	}
+
+	/**
+	 * Detect a shortcode in raw post content using a regex match.
+	 *
+	 * Safe to call on hooks earlier than `init` (unlike WordPress's
+	 * own has_shortcode() which depends on the shortcode being
+	 * registered).
+	 */
+	private static function content_contains_shortcode( $content, $shortcode ) {
+		if ( '' === $content || false === strpos( $content, '[' ) ) {
+			return false;
+		}
+		return (bool) preg_match(
+			'/\[' . preg_quote( $shortcode, '/' ) . '(?:[\s\]\/])/',
+			$content
+		);
+	}
+
+	/**
+	 * Migration: collapse duplicate dsb_* shortcodes that the broken
+	 * 1.2 migration created. For each plugin shortcode, if it appears
+	 * more than once on its target page, keep only the first
+	 * occurrence (preserving any user-specified attributes) and strip
+	 * the rest.
+	 */
+	public static function migrate_dedupe_plugin_shortcodes() {
+		$shortcode_options = array(
+			'dsb_register'         => 'dsb_register_page',
+			'dsb_login'            => 'dsb_login_page',
+			'dsb_profile_view'     => 'dsb_profile_view_page',
+			'dsb_forgot_password'  => 'dsb_forgot_password_page',
+			'dsb_profile_edit'     => 'dsb_profile_edit_page',
+			'dsb_member_directory' => 'dsb_member_directory_page',
+			'dsb_matches'          => 'dsb_matches_page',
+			'dsb_messages'         => 'dsb_messages_page',
+			'dsb_likes'            => 'dsb_likes_page',
+			'dsb_group_chat'       => 'dsb_group_chat_page',
+		);
+
+		foreach ( $shortcode_options as $shortcode => $option_name ) {
+			$page_id = (int) get_option( $option_name );
+			if ( ! $page_id ) {
+				continue;
+			}
+
+			$post = get_post( $page_id );
+			if ( ! $post || 'page' !== $post->post_type ) {
+				continue;
+			}
+
+			$pattern = '/\[' . preg_quote( $shortcode, '/' ) . '(?:\s+[^\]]*)?\]/';
+			if ( ! preg_match_all( $pattern, $post->post_content, $matches ) ) {
+				continue;
+			}
+			if ( count( $matches[0] ) < 2 ) {
+				continue;
+			}
+
+			$first_occurrence = $matches[0][0];
+			$cleaned          = preg_replace( $pattern, '', $post->post_content );
+			$cleaned          = preg_replace( "/\n{3,}/", "\n\n", (string) $cleaned );
+			$cleaned          = trim( (string) $cleaned );
+
+			$new_content = '' === $cleaned
+				? $first_occurrence
+				: $cleaned . "\n\n" . $first_occurrence;
+
+			if ( $new_content !== $post->post_content ) {
+				wp_update_post( array(
+					'ID'           => $page_id,
+					'post_content' => $new_content,
+				) );
+			}
+		}
+	}
+
+	/**
+	 * Migration: make Edit Profile, Forgot Password and Likes &
+	 * Favorites children of the My Profile page so the theme's page
+	 * menu collapses them into a submenu.
+	 */
+	private static function migrate_reparent_profile_children() {
+		$parent_id = (int) get_option( 'dsb_profile_view_page' );
+
+		if ( ! $parent_id || ! get_post( $parent_id ) ) {
+			return;
+		}
+
+		$child_options = array(
+			'dsb_profile_edit_page',
+			'dsb_forgot_password_page',
+			'dsb_likes_page',
+		);
+
+		foreach ( $child_options as $option_name ) {
+			$child_id = (int) get_option( $option_name );
+			if ( ! $child_id ) {
+				continue;
+			}
+
+			$child = get_post( $child_id );
+			if ( ! $child || (int) $child->post_parent === $parent_id ) {
+				continue;
+			}
+
+			wp_update_post( array(
+				'ID'          => $child_id,
+				'post_parent' => $parent_id,
+			) );
+		}
 	}
 
 	/**
@@ -104,12 +343,25 @@ class DSB_Activator {
 			KEY viewed_at (viewed_at)
 		) $charset_collate;";
 
+		// Group chat messages table
+		$table_group_chat = $wpdb->prefix . 'dsb_group_chat';
+		$sql_group_chat = "CREATE TABLE IF NOT EXISTS $table_group_chat (
+			id bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+			user_id bigint(20) UNSIGNED NOT NULL,
+			message_text text NOT NULL,
+			created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY (id),
+			KEY user_id (user_id),
+			KEY created_at (created_at)
+		) $charset_collate;";
+
 		require_once( ABSPATH . 'wp-admin/includes/upgrade.php' );
 		dbDelta( $sql_messages );
 		dbDelta( $sql_likes );
 		dbDelta( $sql_blocks );
 		dbDelta( $sql_reports );
 		dbDelta( $sql_views );
+		dbDelta( $sql_group_chat );
 
 		// Store database version
 		update_option( 'dsb_db_version', '1.0' );
