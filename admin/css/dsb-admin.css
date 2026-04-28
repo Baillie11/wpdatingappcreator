@@ -307,6 +307,94 @@
 	background: linear-gradient(135deg, #1e293b 0%, #334155 50%, #475569 100%);
 }
 
+/* Template Selector */
+.dsb-template-selector {
+	display: grid;
+	grid-template-columns: repeat(2, 1fr);
+	gap: 1rem;
+	margin-bottom: 1rem;
+}
+
+.dsb-template-option {
+	cursor: pointer;
+}
+
+.dsb-template-option input[type="radio"] {
+	position: absolute;
+	opacity: 0;
+	width: 0;
+	height: 0;
+}
+
+.dsb-template-preview {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	padding: 1.5rem 1rem;
+	border: 3px solid #e0e0e0;
+	border-radius: 12px;
+	transition: all 0.3s ease;
+	background: #fff;
+	text-align: center;
+}
+
+.dsb-template-option input[type="radio"]:checked + .dsb-template-preview {
+	border-color: #ff4458;
+	box-shadow: 0 4px 12px rgba(255, 68, 88, 0.3);
+	background: linear-gradient(180deg, rgba(255, 68, 88, 0.05) 0%, rgba(255, 255, 255, 1) 100%);
+}
+
+.dsb-template-option:hover .dsb-template-preview {
+	transform: translateY(-2px);
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.dsb-template-icon {
+	font-size: 2.5rem;
+	margin-bottom: 0.75rem;
+	line-height: 1;
+}
+
+.dsb-template-name {
+	font-size: 1rem;
+	font-weight: 700;
+	color: #1f2937;
+	margin-bottom: 0.5rem;
+}
+
+.dsb-template-desc {
+	font-size: 0.75rem;
+	color: #6b7280;
+	line-height: 1.4;
+}
+
+/* Template Preview Backgrounds */
+.dsb-template-modern {
+	background: linear-gradient(180deg, #fff8f8 0%, #ffffff 100%);
+}
+
+.dsb-template-glassmorphism {
+	background: linear-gradient(135deg, rgba(236, 72, 153, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
+	backdrop-filter: blur(4px);
+}
+
+.dsb-template-minimalist {
+	background: #fafafa;
+	border-color: #d1d5db;
+}
+
+.dsb-template-bold-dark {
+	background: linear-gradient(180deg, #1f2937 0%, #374151 100%);
+}
+
+.dsb-template-bold-dark .dsb-template-name {
+	color: #f9fafb;
+}
+
+.dsb-template-bold-dark .dsb-template-desc {
+	color: #9ca3af;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
 	.dsb-wizard-progress {
@@ -328,5 +416,9 @@
 	
 	.dsb-theme-selector {
 		grid-template-columns: repeat(2, 1fr);
+	}
+	
+	.dsb-template-selector {
+		grid-template-columns: 1fr;
 	}
 }
