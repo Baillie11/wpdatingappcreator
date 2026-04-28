@@ -422,3 +422,210 @@
 		grid-template-columns: 1fr;
 	}
 }
+
+/* ==========================================================================
+   Admin Dashboard — card-based stat grid
+   ========================================================================== */
+.dsb-dashboard .dsb-dash-section-title {
+	margin: 1.75rem 0 0.75rem;
+	font-size: 1.05rem;
+	font-weight: 600;
+	color: #1f2937;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+
+.dsb-dashboard .dsb-dash-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+	gap: 16px;
+	margin-bottom: 8px;
+}
+
+.dsb-dashboard .dsb-dash-card {
+	position: relative;
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	padding: 18px 20px;
+	background: #ffffff;
+	border: 1px solid #e5e7eb;
+	border-radius: 12px;
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+	text-decoration: none;
+	color: inherit;
+	overflow: hidden;
+	transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.dsb-dashboard .dsb-dash-card::before {
+	content: "";
+	position: absolute;
+	inset: 0 auto 0 0;
+	width: 4px;
+	background: linear-gradient(180deg, #ff4458 0%, #ff7a59 100%);
+}
+
+.dsb-dashboard a.dsb-dash-card:hover,
+.dsb-dashboard a.dsb-dash-card:focus {
+	transform: translateY(-2px);
+	box-shadow: 0 6px 18px rgba(31, 41, 55, 0.10);
+	border-color: #d1d5db;
+	color: inherit;
+}
+
+.dsb-dashboard .dsb-dash-card-icon {
+	flex: 0 0 auto;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 48px;
+	height: 48px;
+	font-size: 24px;
+	line-height: 1;
+	background: #f9fafb;
+	border-radius: 50%;
+}
+
+.dsb-dashboard .dsb-dash-card-body {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.dsb-dashboard .dsb-dash-card-value {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	font-size: 28px;
+	font-weight: 700;
+	line-height: 1.1;
+	color: #111827;
+}
+
+.dsb-dashboard .dsb-dash-card-badge {
+	font-size: 11px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	padding: 2px 8px;
+	border-radius: 999px;
+	background: #fee2e2;
+	color: #b91c1c;
+}
+
+.dsb-dashboard .dsb-dash-card-label {
+	margin-top: 2px;
+	font-size: 13px;
+	font-weight: 600;
+	color: #374151;
+}
+
+.dsb-dashboard .dsb-dash-card-sub {
+	margin-top: 2px;
+	font-size: 12px;
+	color: #6b7280;
+}
+
+/* Tone accents — change the left bar + icon background per category. */
+.dsb-dashboard .dsb-dash-card-tone-live::before {
+	background: linear-gradient(180deg, #10b981 0%, #34d399 100%);
+}
+.dsb-dashboard .dsb-dash-card-tone-live .dsb-dash-card-icon {
+	background: rgba(16, 185, 129, 0.12);
+}
+
+.dsb-dashboard .dsb-dash-card-tone-chat::before {
+	background: linear-gradient(180deg, #6366f1 0%, #8b5cf6 100%);
+}
+.dsb-dashboard .dsb-dash-card-tone-chat .dsb-dash-card-icon {
+	background: rgba(99, 102, 241, 0.12);
+}
+
+.dsb-dashboard .dsb-dash-card-tone-messages::before {
+	background: linear-gradient(180deg, #0ea5e9 0%, #38bdf8 100%);
+}
+.dsb-dashboard .dsb-dash-card-tone-messages .dsb-dash-card-icon {
+	background: rgba(14, 165, 233, 0.12);
+}
+
+.dsb-dashboard .dsb-dash-card-tone-members::before {
+	background: linear-gradient(180deg, #ec4899 0%, #f472b6 100%);
+}
+.dsb-dashboard .dsb-dash-card-tone-members .dsb-dash-card-icon {
+	background: rgba(236, 72, 153, 0.12);
+}
+
+.dsb-dashboard .dsb-dash-card-tone-premium::before {
+	background: linear-gradient(180deg, #f59e0b 0%, #fbbf24 100%);
+}
+.dsb-dashboard .dsb-dash-card-tone-premium .dsb-dash-card-icon {
+	background: rgba(245, 158, 11, 0.12);
+}
+
+.dsb-dashboard .dsb-dash-card-tone-new::before {
+	background: linear-gradient(180deg, #06b6d4 0%, #22d3ee 100%);
+}
+.dsb-dashboard .dsb-dash-card-tone-new .dsb-dash-card-icon {
+	background: rgba(6, 182, 212, 0.12);
+}
+
+.dsb-dashboard .dsb-dash-card-tone-likes::before {
+	background: linear-gradient(180deg, #ef4444 0%, #f87171 100%);
+}
+.dsb-dashboard .dsb-dash-card-tone-likes .dsb-dash-card-icon {
+	background: rgba(239, 68, 68, 0.12);
+}
+
+.dsb-dashboard .dsb-dash-card-tone-matches::before {
+	background: linear-gradient(180deg, #ff4458 0%, #ff7a59 100%);
+}
+.dsb-dashboard .dsb-dash-card-tone-matches .dsb-dash-card-icon {
+	background: rgba(255, 68, 88, 0.12);
+}
+
+.dsb-dashboard .dsb-dash-card-tone-views::before {
+	background: linear-gradient(180deg, #8b5cf6 0%, #a78bfa 100%);
+}
+.dsb-dashboard .dsb-dash-card-tone-views .dsb-dash-card-icon {
+	background: rgba(139, 92, 246, 0.12);
+}
+
+.dsb-dashboard .dsb-dash-card-tone-warning::before {
+	background: linear-gradient(180deg, #f59e0b 0%, #fbbf24 100%);
+}
+.dsb-dashboard .dsb-dash-card-tone-warning .dsb-dash-card-icon {
+	background: rgba(245, 158, 11, 0.12);
+}
+
+.dsb-dashboard .dsb-dash-card-tone-danger::before {
+	background: linear-gradient(180deg, #dc2626 0%, #f87171 100%);
+}
+.dsb-dashboard .dsb-dash-card-tone-danger .dsb-dash-card-icon {
+	background: rgba(220, 38, 38, 0.12);
+}
+
+.dsb-dashboard .dsb-dashboard-actions {
+	margin-top: 28px;
+	padding: 18px 20px;
+	background: #ffffff;
+	border: 1px solid #e5e7eb;
+	border-radius: 12px;
+}
+
+.dsb-dashboard .dsb-dashboard-actions h2 {
+	margin: 0 0 12px;
+	font-size: 1rem;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: #1f2937;
+}
+
+@media (max-width: 600px) {
+	.dsb-dashboard .dsb-dash-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.dsb-dashboard .dsb-dash-card-value {
+		font-size: 24px;
+	}
+}

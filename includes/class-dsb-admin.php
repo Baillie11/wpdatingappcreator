@@ -148,31 +148,128 @@ class DSB_Admin {
 
 	/**
 	 * Render dashboard page.
+	 *
+	 * Card-based layout grouped into Live Activity, Members,
+	 * Engagement, and Moderation. Each card links to the relevant
+	 * admin page so the dashboard doubles as a quick-jump hub.
 	 */
 	public function render_dashboard() {
-		// Get statistics
-		$user_count = count_users();
-		$member_count = 0;
+		global $wpdb;
+
+		// --- Member counts --------------------------------------------------
+		$user_count    = count_users();
+		$member_count  = 0;
+		$premium_count = 0;
 		if ( isset( $user_count['avail_roles']['dating_member'] ) ) {
-			$member_count += $user_count['avail_roles']['dating_member'];
+			$member_count += (int) $user_count['avail_roles']['dating_member'];
 		}
 		if ( isset( $user_count['avail_roles']['dating_premium'] ) ) {
-			$member_count += $user_count['avail_roles']['dating_premium'];
+			$member_count  += (int) $user_count['avail_roles']['dating_premium'];
+			$premium_count = (int) $user_count['avail_roles']['dating_premium'];
 		}
 
-		global $wpdb;
-		$messages_table = $wpdb->prefix . 'dsb_messages';
-		$likes_table = $wpdb->prefix . 'dsb_likes';
-		$reports_table = $wpdb->prefix . 'dsb_reports';
+		// --- Table names ----------------------------------------------------
+		$messages_table   = $wpdb->prefix . 'dsb_messages';
+		$likes_table      = $wpdb->prefix . 'dsb_likes';
+		$reports_table    = $wpdb->prefix . 'dsb_reports';
+		$views_table      = $wpdb->prefix . 'dsb_profile_views';
+		$group_chat_table = $wpdb->prefix . 'dsb_group_chat';
 
-		$total_messages = $wpdb->get_var( "SELECT COUNT(*) FROM $messages_table" );
-		$total_likes = $wpdb->get_var( "SELECT COUNT(*) FROM $likes_table" );
-		$pending_reports = $wpdb->get_var( "SELECT COUNT(*) FROM $reports_table WHERE status = 'pending'" );
+		// --- All-time totals ------------------------------------------------
+		$total_messages  = (int) $wpdb->get_var( "SELECT COUNT(*) FROM $messages_table" );
+		$total_likes     = (int) $wpdb->get_var( "SELECT COUNT(*) FROM $likes_table" );
+		$pending_reports = (int) $wpdb->get_var( "SELECT COUNT(*) FROM $reports_table WHERE status = 'pending'" );
+		$profile_views   = (int) $wpdb->get_var( "SELECT COUNT(*) FROM $views_table" );
+
+		// Mutual matches: pairs where A likes B AND B likes A. The self-join
+		// counts each pair twice, so divide by 2 for the true match count.
+		$mutual_matches = (int) $wpdb->get_var(
+			"SELECT COUNT(*) / 2 FROM $likes_table l1
+			 INNER JOIN $likes_table l2
+			   ON l1.user_id = l2.target_id
+			  AND l1.target_id = l2.user_id"
+		);
+
+		// --- Live activity --------------------------------------------------
+		$five_min_ago    = gmdate( 'Y-m-d H:i:s', current_time( 'timestamp', true ) - ( 5 * MINUTE_IN_SECONDS ) );
+		$fifteen_min_ago = gmdate( 'Y-m-d H:i:s', current_time( 'timestamp', true ) - ( 15 * MINUTE_IN_SECONDS ) );
+
+		// dsb_last_activity is stored via current_time('mysql') (site time),
+		// so compare in site time too.
+		$five_min_ago_local = date( 'Y-m-d H:i:s', strtotime( '-5 minutes' ) );
+		$online_now = (int) $wpdb->get_var( $wpdb->prepare(
+			"SELECT COUNT(DISTINCT user_id) FROM {$wpdb->usermeta}
+			 WHERE meta_key = 'dsb_last_activity' AND meta_value >= %s",
+			$five_min_ago_local
+		) );
+
+		$fifteen_min_ago_local = date( 'Y-m-d H:i:s', strtotime( '-15 minutes' ) );
+		$in_chat_room = (int) $wpdb->get_var( $wpdb->prepare(
+			"SELECT COUNT(DISTINCT user_id) FROM $group_chat_table WHERE created_at >= %s",
+			$fifteen_min_ago_local
+		) );
+
+		$today_start = date( 'Y-m-d 00:00:00' );
+		$messages_today = (int) $wpdb->get_var( $wpdb->prepare(
+			"SELECT COUNT(*) FROM $messages_table WHERE created_at >= %s",
+			$today_start
+		) );
+
+		// --- Pipeline / moderation ----------------------------------------
+		$pending_approvals = count( get_users( array(
+			'role__in'   => array( 'dating_member', 'dating_premium' ),
+			'fields'     => 'ID',
+			'meta_query' => array(
+				array( 'key' => 'dsb_profile_approved', 'compare' => 'NOT EXISTS' ),
+				array( 'key' => 'dsb_banned',           'compare' => 'NOT EXISTS' ),
+			),
+		) ) );
+
+		$week_ago_local = date( 'Y-m-d H:i:s', strtotime( '-7 days' ) );
+		$new_this_week  = count( get_users( array(
+			'role__in'    => array( 'dating_member', 'dating_premium' ),
+			'fields'      => 'ID',
+			'date_query'  => array( array( 'after' => '7 days ago' ) ),
+		) ) );
+
+		// Render helper for cards.
+		$render_card = function ( $args ) {
+			$args = wp_parse_args( $args, array(
+				'icon'     => '✨',
+				'value'    => 0,
+				'label'    => '',
+				'sub'      => '',
+				'href'     => '',
+				'tone'     => 'default',
+				'badge'    => '',
+			) );
+
+			$tone_class = 'dsb-dash-card-tone-' . sanitize_html_class( $args['tone'] );
+			$tag        = $args['href'] ? 'a' : 'div';
+			$href_attr  = $args['href'] ? ' href="' . esc_url( $args['href'] ) . '"' : '';
+			?>
+			<<?php echo $tag; ?> class="dsb-dash-card <?php echo esc_attr( $tone_class ); ?>"<?php echo $href_attr; ?>>
+				<div class="dsb-dash-card-icon" aria-hidden="true"><?php echo esc_html( $args['icon'] ); ?></div>
+				<div class="dsb-dash-card-body">
+					<div class="dsb-dash-card-value">
+						<?php echo esc_html( number_format_i18n( (int) $args['value'] ) ); ?>
+						<?php if ( $args['badge'] ) : ?>
+							<span class="dsb-dash-card-badge"><?php echo esc_html( $args['badge'] ); ?></span>
+						<?php endif; ?>
+					</div>
+					<div class="dsb-dash-card-label"><?php echo esc_html( $args['label'] ); ?></div>
+					<?php if ( $args['sub'] ) : ?>
+						<div class="dsb-dash-card-sub"><?php echo esc_html( $args['sub'] ); ?></div>
+					<?php endif; ?>
+				</div>
+			</<?php echo $tag; ?>>
+			<?php
+		};
 
 		?>
-		<div class="wrap">
+		<div class="wrap dsb-dashboard">
 			<h1><?php esc_html_e( 'Dating Site Builder Dashboard', 'dating-site-builder' ); ?></h1>
-			
+
 			<?php if ( ! get_option( 'dsb_setup_complete' ) ) : ?>
 				<div class="notice notice-warning">
 					<p>
@@ -184,23 +281,117 @@ class DSB_Admin {
 				</div>
 			<?php endif; ?>
 
-			<div class="dsb-dashboard-stats">
-				<div class="dsb-stat-box">
-					<h3><?php echo esc_html( number_format( $member_count ) ); ?></h3>
-					<p><?php esc_html_e( 'Total Members', 'dating-site-builder' ); ?></p>
-				</div>
-				<div class="dsb-stat-box">
-					<h3><?php echo esc_html( number_format( $total_messages ) ); ?></h3>
-					<p><?php esc_html_e( 'Messages Sent', 'dating-site-builder' ); ?></p>
-				</div>
-				<div class="dsb-stat-box">
-					<h3><?php echo esc_html( number_format( $total_likes ) ); ?></h3>
-					<p><?php esc_html_e( 'Total Likes', 'dating-site-builder' ); ?></p>
-				</div>
-				<div class="dsb-stat-box">
-					<h3><?php echo esc_html( number_format( $pending_reports ) ); ?></h3>
-					<p><?php esc_html_e( 'Pending Reports', 'dating-site-builder' ); ?></p>
-				</div>
+			<h2 class="dsb-dash-section-title"><?php esc_html_e( 'Live Activity', 'dating-site-builder' ); ?></h2>
+			<div class="dsb-dash-grid">
+				<?php
+				$render_card( array(
+					'icon'  => '🟢',
+					'value' => $online_now,
+					'label' => __( 'Online Now', 'dating-site-builder' ),
+					'sub'   => __( 'Active in the last 5 minutes', 'dating-site-builder' ),
+					'href'  => admin_url( 'admin.php?page=dsb-members' ),
+					'tone'  => 'live',
+				) );
+				$render_card( array(
+					'icon'  => '💬',
+					'value' => $in_chat_room,
+					'label' => __( 'In Chat Room', 'dating-site-builder' ),
+					'sub'   => __( 'Posted a chat message in the last 15 minutes', 'dating-site-builder' ),
+					'href'  => get_permalink( get_option( 'dsb_group_chat_page' ) ) ?: '',
+					'tone'  => 'chat',
+				) );
+				$render_card( array(
+					'icon'  => '✉️',
+					'value' => $messages_today,
+					'label' => __( 'Messages Today', 'dating-site-builder' ),
+					'sub'   => __( 'Direct messages sent since midnight', 'dating-site-builder' ),
+					'tone'  => 'messages',
+				) );
+				?>
+			</div>
+
+			<h2 class="dsb-dash-section-title"><?php esc_html_e( 'Members', 'dating-site-builder' ); ?></h2>
+			<div class="dsb-dash-grid">
+				<?php
+				$render_card( array(
+					'icon'  => '👥',
+					'value' => $member_count,
+					'label' => __( 'Total Members', 'dating-site-builder' ),
+					'sub'   => __( 'All approved & pending dating accounts', 'dating-site-builder' ),
+					'href'  => admin_url( 'admin.php?page=dsb-members' ),
+					'tone'  => 'members',
+				) );
+				$render_card( array(
+					'icon'  => '⭐',
+					'value' => $premium_count,
+					'label' => __( 'Premium Members', 'dating-site-builder' ),
+					'sub'   => __( 'Users on the dating_premium role', 'dating-site-builder' ),
+					'tone'  => 'premium',
+				) );
+				$render_card( array(
+					'icon'  => '🆕',
+					'value' => $new_this_week,
+					'label' => __( 'New This Week', 'dating-site-builder' ),
+					'sub'   => __( 'Members registered in the last 7 days', 'dating-site-builder' ),
+					'tone'  => 'new',
+				) );
+				?>
+			</div>
+
+			<h2 class="dsb-dash-section-title"><?php esc_html_e( 'Engagement', 'dating-site-builder' ); ?></h2>
+			<div class="dsb-dash-grid">
+				<?php
+				$render_card( array(
+					'icon'  => '❤️',
+					'value' => $total_likes,
+					'label' => __( 'Total Likes', 'dating-site-builder' ),
+					'sub'   => __( 'Lifetime number of profile likes', 'dating-site-builder' ),
+					'tone'  => 'likes',
+				) );
+				$render_card( array(
+					'icon'  => '💕',
+					'value' => $mutual_matches,
+					'label' => __( 'Mutual Matches', 'dating-site-builder' ),
+					'sub'   => __( 'Pairs where both members liked each other', 'dating-site-builder' ),
+					'tone'  => 'matches',
+				) );
+				$render_card( array(
+					'icon'  => '👀',
+					'value' => $profile_views,
+					'label' => __( 'Profile Views', 'dating-site-builder' ),
+					'sub'   => __( 'Lifetime profile page views', 'dating-site-builder' ),
+					'tone'  => 'views',
+				) );
+				?>
+			</div>
+
+			<h2 class="dsb-dash-section-title"><?php esc_html_e( 'Moderation', 'dating-site-builder' ); ?></h2>
+			<div class="dsb-dash-grid">
+				<?php
+				$render_card( array(
+					'icon'  => '⏳',
+					'value' => $pending_approvals,
+					'label' => __( 'Pending Approvals', 'dating-site-builder' ),
+					'sub'   => __( 'Members awaiting admin approval', 'dating-site-builder' ),
+					'href'  => admin_url( 'admin.php?page=dsb-members&filter=pending' ),
+					'tone'  => 'warning',
+				) );
+				$render_card( array(
+					'icon'  => '🚩',
+					'value' => $pending_reports,
+					'label' => __( 'Pending Reports', 'dating-site-builder' ),
+					'sub'   => __( 'User-submitted reports awaiting review', 'dating-site-builder' ),
+					'href'  => admin_url( 'admin.php?page=dsb-reports' ),
+					'tone'  => 'danger',
+				) );
+				$render_card( array(
+					'icon'  => '💌',
+					'value' => $total_messages,
+					'label' => __( 'Messages Sent', 'dating-site-builder' ),
+					'sub'   => __( 'Lifetime direct-message volume', 'dating-site-builder' ),
+					'tone'  => 'messages',
+				) );
+				?>
 			</div>
 
 			<div class="dsb-dashboard-actions">
