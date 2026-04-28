@@ -1600,8 +1600,9 @@ class DSB_Frontend {
 				<div class="dsb-profile-fields">
 					<?php foreach ( $fields as $field_key => $field ) : 
 						$value = get_user_meta( $user_id, 'dsb_' . $field_key, true );
+						$couple_attr = ! empty( $field['requires_couple'] ) ? ' data-requires-couple="1"' : '';
 						?>
-						<div class="dsb-form-group">
+						<div class="dsb-form-group"<?php echo $couple_attr; ?>>
 							<label for="field_<?php echo esc_attr( $field_key ); ?>">
 								<?php echo esc_html( $field['label'] ); ?>
 								<?php if ( ! empty( $field['required'] ) ) : ?>
@@ -1698,6 +1699,20 @@ class DSB_Frontend {
 			</form>
 		</div>
 		</div><!-- .dsb-app-content -->
+		<script>
+		jQuery(function($){
+			// Show / hide partner-only fields based on the "I am / We are"
+			// select. Partner fields are flagged with data-requires-couple="1".
+			function dsbToggleCoupleFields(){
+				var $kind  = $('#field_profile_kind');
+				var value  = $kind.length ? ( $kind.val() || '' ) : '';
+				var couple = value.indexOf('couple_') === 0;
+				$('.dsb-form-group[data-requires-couple]').toggle( couple );
+			}
+			dsbToggleCoupleFields();
+			$(document).on('change', '#field_profile_kind', dsbToggleCoupleFields);
+		});
+		</script>
 		<?php
 		return ob_get_clean();
 	}
@@ -1756,6 +1771,25 @@ class DSB_Frontend {
 		$about_me          = get_user_meta( $user_id, 'dsb_about_me', true );
 		$looking_for_text  = get_user_meta( $user_id, 'dsb_looking_for_text', true );
 
+		// I am / We are + partner / dual-profile data.
+		$profile_kind        = get_user_meta( $user_id, 'dsb_profile_kind', true );
+		$profile_kind_label  = '';
+		if ( $profile_kind && isset( $fields['profile_kind']['options'][ $profile_kind ] ) ) {
+			$profile_kind_label = $fields['profile_kind']['options'][ $profile_kind ];
+		}
+		$is_couple   = $profile_kind && strpos( $profile_kind, 'couple_' ) === 0;
+		$kind_prefix = $is_couple ? __( 'We are', 'dating-site-builder' ) : __( 'I am', 'dating-site-builder' );
+
+		$partner_name        = get_user_meta( $user_id, 'dsb_partner_display_name', true );
+		$partner_dob         = get_user_meta( $user_id, 'dsb_partner_date_of_birth', true );
+		$partner_age         = $partner_dob ? $this->calculate_age( $partner_dob ) : '';
+		$partner_headline    = get_user_meta( $user_id, 'dsb_partner_headline', true );
+		$partner_about       = get_user_meta( $user_id, 'dsb_partner_about', true );
+		$partner_looking_for = get_user_meta( $user_id, 'dsb_partner_looking_for', true );
+		$has_partner_info    = $is_couple && (
+			$partner_name || $partner_age || $partner_headline || $partner_about || $partner_looking_for
+		);
+
 		// Build the location string from whatever pieces the member has
 		// supplied (city, state/region, country) so visitors can see
 		// roughly where they are without leaking the full address.
@@ -1779,6 +1813,13 @@ class DSB_Frontend {
 			'city',
 			'state',
 			'country',
+			// Surfaced explicitly above / in the partner section below.
+			'profile_kind',
+			'partner_display_name',
+			'partner_date_of_birth',
+			'partner_headline',
+			'partner_about',
+			'partner_looking_for',
 		);
 
 		// Pre-compute the remaining detail rows so we can decide whether
@@ -1816,7 +1857,7 @@ class DSB_Frontend {
 			);
 		}
 
-		$has_any_text = ( $headline || $about_me || $looking_for_text || ! empty( $detail_rows ) || $location );
+		$has_any_text = ( $headline || $about_me || $looking_for_text || ! empty( $detail_rows ) || $location || $profile_kind_label || $has_partner_info );
 
 		$this->add_member_page_class();
 
@@ -1835,6 +1876,12 @@ class DSB_Frontend {
 						<h2>
 							<?php echo esc_html( $user->display_name ); ?><?php echo $age ? ', ' . esc_html( $age ) : ''; ?>
 						</h2>
+						<?php if ( $profile_kind_label ) : ?>
+							<p class="dsb-profile-kind">
+								<span class="dsb-profile-kind-prefix"><?php echo esc_html( $kind_prefix ); ?>:</span>
+								<span class="dsb-profile-kind-value"><?php echo esc_html( $profile_kind_label ); ?></span>
+							</p>
+						<?php endif; ?>
 						<?php if ( $location ) : ?>
 							<p class="dsb-profile-location"><?php echo esc_html( $location ); ?></p>
 						<?php endif; ?>
@@ -1870,6 +1917,36 @@ class DSB_Frontend {
 						<section class="dsb-profile-section">
 							<h3><?php esc_html_e( 'What I\'m Looking For', 'dating-site-builder' ); ?></h3>
 							<p class="dsb-profile-bio"><?php echo nl2br( esc_html( $looking_for_text ) ); ?></p>
+						</section>
+					<?php endif; ?>
+
+					<?php if ( $has_partner_info ) : ?>
+						<section class="dsb-profile-section dsb-profile-partner">
+							<h3>
+								<?php
+								if ( $partner_name ) {
+									printf(
+										/* translators: %s: partner display name and (optional) age. */
+										esc_html__( 'About %s', 'dating-site-builder' ),
+										esc_html( $partner_name . ( $partner_age ? ', ' . $partner_age : '' ) )
+									);
+								} else {
+									esc_html_e( 'About Partner', 'dating-site-builder' );
+								}
+								?>
+							</h3>
+							<?php if ( $partner_headline ) : ?>
+								<p class="dsb-profile-headline">“<?php echo esc_html( $partner_headline ); ?>”</p>
+							<?php endif; ?>
+							<?php if ( $partner_about ) : ?>
+								<p class="dsb-profile-bio"><?php echo nl2br( esc_html( $partner_about ) ); ?></p>
+							<?php endif; ?>
+							<?php if ( $partner_looking_for ) : ?>
+								<p class="dsb-profile-bio">
+									<strong><?php esc_html_e( 'What partner is looking for:', 'dating-site-builder' ); ?></strong><br>
+									<?php echo nl2br( esc_html( $partner_looking_for ) ); ?>
+								</p>
+							<?php endif; ?>
 						</section>
 					<?php endif; ?>
 
