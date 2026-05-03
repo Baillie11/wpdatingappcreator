@@ -770,6 +770,27 @@
 
 .dsb-app-logo-icon {
 	font-size: 1.5rem !important;
+	display: inline-block !important;
+	transform-origin: 50% 50% !important;
+}
+
+/* Click-to-spin animation for the header logo. Triggered by the
+   public JS, which adds .is-spinning to either the image or the
+   emoji/text icon, then navigates to the home link once the
+   animation finishes. */
+@keyframes dsb-logo-spin {
+	from { transform: rotate(0deg); }
+	to   { transform: rotate(360deg); }
+}
+
+.dsb-app-logo-img.is-spinning,
+.dsb-app-logo-icon.is-spinning {
+	animation: dsb-logo-spin 0.6s ease-in-out;
+	will-change: transform;
+}
+
+.dsb-app-logo-img {
+	transform-origin: 50% 50% !important;
 }
 
 .dsb-app-logo-img {

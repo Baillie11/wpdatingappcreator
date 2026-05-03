@@ -1,0 +1,19 @@
+# Build artefacts
+*.zip
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor / IDE
+.idea/
+.vscode/
+*.code-workspace
+*.swp
+*.swo
+*.bak
+*.tmp
+
+# Logs
+*.log

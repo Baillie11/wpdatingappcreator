@@ -47,6 +47,76 @@ class DSB_Activator {
 			self::migrate_dedupe_plugin_shortcodes();
 			update_option( 'dsb_db_version', '1.3' );
 		}
+
+		if ( version_compare( $current, '1.4', '<' ) ) {
+			self::migrate_restore_member_approval();
+			update_option( 'dsb_db_version', '1.4' );
+		}
+
+		// Self-heal sweep: re-approve any dating member that is
+		// somehow missing the approval flag. Throttled to once per
+		// hour to keep front-end requests cheap. Runs in addition to
+		// the versioned migration above so the system can recover
+		// even if the approval meta is cleared after the migration
+		// has already finished.
+		if ( false === get_transient( 'dsb_member_approval_sweep' ) ) {
+			self::migrate_restore_member_approval();
+			set_transient( 'dsb_member_approval_sweep', 1, HOUR_IN_SECONDS );
+		}
+	}
+
+	/**
+	 * Migration / self-heal: ensure every dating member has a
+	 * `dsb_profile_approved` meta value.
+	 *
+	 * Members that were previously approved but somehow lost the
+	 * flag (e.g. external user-meta cleanup, partial user-edit save
+	 * before the form sentinel was added) get auto-approved again
+	 * unless they are currently banned. New members that registered
+	 * while admin approval was required keep their pending state
+	 * because they already have the meta set to '0'.
+	 */
+	public static function migrate_restore_member_approval() {
+		$members = get_users( array(
+			'role__in' => array( 'dating_member', 'dating_premium' ),
+			'fields'   => 'ID',
+			'number'   => -1,
+		) );
+
+		if ( empty( $members ) ) {
+			return;
+		}
+
+		$require_approval = (bool) get_option( 'dsb_require_profile_approval', false );
+
+		foreach ( $members as $user_id ) {
+			$user_id = (int) $user_id;
+			if ( ! $user_id ) {
+				continue;
+			}
+			// Skip banned users - they should remain blocked.
+			if ( get_user_meta( $user_id, 'dsb_banned', true ) ) {
+				continue;
+			}
+			$existing = get_user_meta( $user_id, 'dsb_profile_approved', true );
+			if ( '' !== $existing && null !== $existing ) {
+				// Meta already set (either '1' or '0'). Leave it alone.
+				continue;
+			}
+			// Missing flag: auto-approve unless the site requires
+			// admin approval AND the user has not yet completed any
+			// profile data (treat them as a fresh signup).
+			if ( $require_approval ) {
+				$has_profile_data = get_user_meta( $user_id, 'dsb_photos', true )
+					|| get_user_meta( $user_id, 'dsb_date_of_birth', true )
+					|| get_user_meta( $user_id, 'dsb_gender', true );
+				if ( ! $has_profile_data ) {
+					update_user_meta( $user_id, 'dsb_profile_approved', '0' );
+					continue;
+				}
+			}
+			update_user_meta( $user_id, 'dsb_profile_approved', '1' );
+		}
 	}
 
 	/**
@@ -363,8 +433,12 @@ class DSB_Activator {
 		dbDelta( $sql_views );
 		dbDelta( $sql_group_chat );
 
-		// Store database version
-		update_option( 'dsb_db_version', '1.0' );
+		// Store database version - only seed on fresh installs so
+		// reactivating the plugin does not roll already-applied
+		// migrations back to 1.0 and re-run them.
+		if ( false === get_option( 'dsb_db_version' ) ) {
+			add_option( 'dsb_db_version', '1.0' );
+		}
 	}
 
 	/**

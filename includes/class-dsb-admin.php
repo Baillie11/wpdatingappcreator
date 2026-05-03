@@ -416,6 +416,52 @@ class DSB_Admin {
 	}
 
 	/**
+	 * Render a compact grid of clickable admin filter cards.
+	 *
+	 * @param array $cards List of card definitions.
+	 */
+	private function render_admin_filter_cards( $cards ) {
+		if ( empty( $cards ) || ! is_array( $cards ) ) {
+			return;
+		}
+		?>
+		<div class="dsb-admin-filter-cards">
+			<?php foreach ( $cards as $card ) : ?>
+				<?php
+				$card = wp_parse_args(
+					$card,
+					array(
+						'href'    => '',
+						'icon'    => '📊',
+						'value'   => 0,
+						'label'   => '',
+						'tone'    => 'default',
+						'current' => false,
+					)
+				);
+
+				$classes = array(
+					'dsb-admin-filter-card',
+					'dsb-admin-filter-card-tone-' . sanitize_html_class( $card['tone'] ),
+				);
+
+				if ( ! empty( $card['current'] ) ) {
+					$classes[] = 'is-current';
+				}
+				?>
+				<a href="<?php echo esc_url( $card['href'] ); ?>" class="<?php echo esc_attr( implode( ' ', $classes ) ); ?>">
+					<span class="dsb-admin-filter-card-icon" aria-hidden="true"><?php echo esc_html( $card['icon'] ); ?></span>
+					<span class="dsb-admin-filter-card-body">
+						<span class="dsb-admin-filter-card-value"><?php echo esc_html( number_format_i18n( (int) $card['value'] ) ); ?></span>
+						<span class="dsb-admin-filter-card-label"><?php echo esc_html( $card['label'] ); ?></span>
+					</span>
+				</a>
+			<?php endforeach; ?>
+		</div>
+		<?php
+	}
+
+	/**
 	 * Render setup wizard.
 	 */
 	public function render_wizard() {
@@ -728,7 +774,7 @@ class DSB_Admin {
 	 * Wizard Step 3: Profile Fields.
 	 */
 	private function render_wizard_step_3() {
-		$enabled_groups = get_option( 'dsb_enabled_field_groups', array( 'basics', 'about' ) );
+		$enabled_groups = get_option( 'dsb_enabled_field_groups', array( 'basics', 'about', 'lifestyle' ) );
 		$allow_custom_gender = get_option( 'dsb_allow_custom_gender', true );
 		$allow_multiple_interests = get_option( 'dsb_allow_multiple_interests', true );
 		$max_photos = get_option( 'dsb_max_photos', 10 );
@@ -748,12 +794,12 @@ class DSB_Admin {
 
 						<label>
 							<input type="checkbox" name="dsb_enabled_field_groups[]" value="about" <?php checked( in_array( 'about', $enabled_groups ) ); ?>>
-							<?php esc_html_e( 'About Me (headline, bio, what I\'m looking for)', 'dating-site-builder' ); ?>
+							<?php esc_html_e( 'Vibe & Interests (vibe, interaction style, interests, intent)', 'dating-site-builder' ); ?>
 						</label><br>
 
 						<label>
 							<input type="checkbox" name="dsb_enabled_field_groups[]" value="lifestyle" <?php checked( in_array( 'lifestyle', $enabled_groups ) ); ?>>
-							<?php esc_html_e( 'Lifestyle & Interests (hobbies, occupation, education, smoking, drinking)', 'dating-site-builder' ); ?>
+							<?php esc_html_e( 'Optional Details (occupation, education, smoking, drinking)', 'dating-site-builder' ); ?>
 						</label><br>
 
 						<label>
@@ -1459,18 +1505,47 @@ class DSB_Admin {
 			'meta_key' => 'dsb_banned',
 			'meta_value' => '1',
 		) ) );
+
+		$member_filter_cards = array(
+			array(
+				'href'    => admin_url( 'admin.php?page=dsb-members' ),
+				'icon'    => '👥',
+				'value'   => $all_count,
+				'label'   => __( 'All Members', 'dating-site-builder' ),
+				'tone'    => 'members',
+				'current' => 'all' === $filter,
+			),
+			array(
+				'href'    => admin_url( 'admin.php?page=dsb-members&filter=pending' ),
+				'icon'    => '⏳',
+				'value'   => $pending_count,
+				'label'   => __( 'Pending Approval', 'dating-site-builder' ),
+				'tone'    => 'warning',
+				'current' => 'pending' === $filter,
+			),
+			array(
+				'href'    => admin_url( 'admin.php?page=dsb-members&filter=suspended' ),
+				'icon'    => '⏸️',
+				'value'   => $suspended_count,
+				'label'   => __( 'Suspended', 'dating-site-builder' ),
+				'tone'    => 'muted',
+				'current' => 'suspended' === $filter,
+			),
+			array(
+				'href'    => admin_url( 'admin.php?page=dsb-members&filter=banned' ),
+				'icon'    => '🚫',
+				'value'   => $banned_count,
+				'label'   => __( 'Banned', 'dating-site-builder' ),
+				'tone'    => 'danger',
+				'current' => 'banned' === $filter,
+			),
+		);
 		?>
 		<div class="wrap">
 			<h1><?php esc_html_e( 'Manage Members', 'dating-site-builder' ); ?></h1>
+			<?php $this->render_admin_filter_cards( $member_filter_cards ); ?>
 
-			<ul class="subsubsub">
-				<li><a href="<?php echo esc_url( admin_url( 'admin.php?page=dsb-members' ) ); ?>" class="<?php echo $filter === 'all' ? 'current' : ''; ?>"><?php esc_html_e( 'All', 'dating-site-builder' ); ?> <span class="count">(<?php echo esc_html( $all_count ); ?>)</span></a> |</li>
-				<li><a href="<?php echo esc_url( admin_url( 'admin.php?page=dsb-members&filter=pending' ) ); ?>" class="<?php echo $filter === 'pending' ? 'current' : ''; ?>"><?php esc_html_e( 'Pending Approval', 'dating-site-builder' ); ?> <span class="count">(<?php echo esc_html( $pending_count ); ?>)</span></a> |</li>
-				<li><a href="<?php echo esc_url( admin_url( 'admin.php?page=dsb-members&filter=suspended' ) ); ?>" class="<?php echo $filter === 'suspended' ? 'current' : ''; ?>"><?php esc_html_e( 'Suspended', 'dating-site-builder' ); ?> <span class="count">(<?php echo esc_html( $suspended_count ); ?>)</span></a> |</li>
-				<li><a href="<?php echo esc_url( admin_url( 'admin.php?page=dsb-members&filter=banned' ) ); ?>" class="<?php echo $filter === 'banned' ? 'current' : ''; ?>"><?php esc_html_e( 'Banned', 'dating-site-builder' ); ?> <span class="count">(<?php echo esc_html( $banned_count ); ?>)</span></a></li>
-			</ul>
-
-			<form method="get" class="search-form">
+			<form method="get" class="search-form dsb-members-search-form">
 				<input type="hidden" name="page" value="dsb-members">
 				<?php if ( $filter !== 'all' ) : ?>
 					<input type="hidden" name="filter" value="<?php echo esc_attr( $filter ); ?>">
@@ -1593,8 +1668,7 @@ class DSB_Admin {
 			.dsb-status-pending { background: #fff3cd; color: #856404; }
 			.dsb-status-suspended { background: #ffeaa7; color: #856404; }
 			.dsb-status-banned { background: #f8d7da; color: #721c24; }
-			.search-form { float: right; margin-bottom: 10px; }
-			.subsubsub { margin-bottom: 40px; }
+			.dsb-members-search-form { float: right; clear: both; margin-bottom: 10px; }
 		</style>
 		<?php
 	}
@@ -1667,18 +1741,47 @@ class DSB_Admin {
 			$per_page,
 			$offset
 		) );
+
+		$report_filter_cards = array(
+			array(
+				'href'    => admin_url( 'admin.php?page=dsb-reports&filter=pending' ),
+				'icon'    => '🚩',
+				'value'   => $pending_count ?: 0,
+				'label'   => __( 'Pending', 'dating-site-builder' ),
+				'tone'    => 'warning',
+				'current' => 'pending' === $filter,
+			),
+			array(
+				'href'    => admin_url( 'admin.php?page=dsb-reports&filter=resolved' ),
+				'icon'    => '✅',
+				'value'   => $resolved_count ?: 0,
+				'label'   => __( 'Resolved', 'dating-site-builder' ),
+				'tone'    => 'success',
+				'current' => 'resolved' === $filter,
+			),
+			array(
+				'href'    => admin_url( 'admin.php?page=dsb-reports&filter=dismissed' ),
+				'icon'    => '🗂️',
+				'value'   => $dismissed_count ?: 0,
+				'label'   => __( 'Dismissed', 'dating-site-builder' ),
+				'tone'    => 'muted',
+				'current' => 'dismissed' === $filter,
+			),
+			array(
+				'href'    => admin_url( 'admin.php?page=dsb-reports&filter=all' ),
+				'icon'    => '📋',
+				'value'   => $all_count ?: 0,
+				'label'   => __( 'All Reports', 'dating-site-builder' ),
+				'tone'    => 'default',
+				'current' => 'all' === $filter,
+			),
+		);
 		?>
 		<div class="wrap">
 			<h1><?php esc_html_e( 'User Reports', 'dating-site-builder' ); ?></h1>
+			<?php $this->render_admin_filter_cards( $report_filter_cards ); ?>
 
-			<ul class="subsubsub">
-				<li><a href="<?php echo esc_url( admin_url( 'admin.php?page=dsb-reports&filter=pending' ) ); ?>" class="<?php echo $filter === 'pending' ? 'current' : ''; ?>"><?php esc_html_e( 'Pending', 'dating-site-builder' ); ?> <span class="count">(<?php echo esc_html( $pending_count ?: 0 ); ?>)</span></a> |</li>
-				<li><a href="<?php echo esc_url( admin_url( 'admin.php?page=dsb-reports&filter=resolved' ) ); ?>" class="<?php echo $filter === 'resolved' ? 'current' : ''; ?>"><?php esc_html_e( 'Resolved', 'dating-site-builder' ); ?> <span class="count">(<?php echo esc_html( $resolved_count ?: 0 ); ?>)</span></a> |</li>
-				<li><a href="<?php echo esc_url( admin_url( 'admin.php?page=dsb-reports&filter=dismissed' ) ); ?>" class="<?php echo $filter === 'dismissed' ? 'current' : ''; ?>"><?php esc_html_e( 'Dismissed', 'dating-site-builder' ); ?> <span class="count">(<?php echo esc_html( $dismissed_count ?: 0 ); ?>)</span></a> |</li>
-				<li><a href="<?php echo esc_url( admin_url( 'admin.php?page=dsb-reports&filter=all' ) ); ?>" class="<?php echo $filter === 'all' ? 'current' : ''; ?>"><?php esc_html_e( 'All', 'dating-site-builder' ); ?> <span class="count">(<?php echo esc_html( $all_count ?: 0 ); ?>)</span></a></li>
-			</ul>
-
-			<table class="wp-list-table widefat fixed striped" style="margin-top:40px;">
+			<table class="wp-list-table widefat fixed striped dsb-admin-report-table">
 				<thead>
 					<tr>
 						<th scope="col"><?php esc_html_e( 'Reporter', 'dating-site-builder' ); ?></th>
@@ -1882,7 +1985,7 @@ class DSB_Admin {
 		$default_country        = get_option( 'dsb_default_country', '' );
 		$require_email          = get_option( 'dsb_require_email_verification', false );
 		$require_approval       = get_option( 'dsb_require_profile_approval', false );
-		$enabled_groups         = get_option( 'dsb_enabled_field_groups', array( 'basics', 'about' ) );
+		$enabled_groups         = get_option( 'dsb_enabled_field_groups', array( 'basics', 'about', 'lifestyle' ) );
 		if ( ! is_array( $enabled_groups ) ) {
 			$enabled_groups = array();
 		}
@@ -2045,11 +2148,11 @@ class DSB_Admin {
 									</label><br>
 									<label>
 										<input type="checkbox" name="dsb_enabled_field_groups[]" value="about" <?php checked( in_array( 'about', $enabled_groups, true ) ); ?>>
-										<?php esc_html_e( 'About Me (headline, bio, what I\'m looking for)', 'dating-site-builder' ); ?>
+										<?php esc_html_e( 'Vibe & Interests (vibe, interaction style, interests, intent)', 'dating-site-builder' ); ?>
 									</label><br>
 									<label>
 										<input type="checkbox" name="dsb_enabled_field_groups[]" value="lifestyle" <?php checked( in_array( 'lifestyle', $enabled_groups, true ) ); ?>>
-										<?php esc_html_e( 'Lifestyle & Interests (hobbies, occupation, education, smoking, drinking)', 'dating-site-builder' ); ?>
+										<?php esc_html_e( 'Optional Details (occupation, education, smoking, drinking)', 'dating-site-builder' ); ?>
 									</label><br>
 									<label>
 										<input type="checkbox" name="dsb_enabled_field_groups[]" value="accessibility" <?php checked( in_array( 'accessibility', $enabled_groups, true ) ); ?>>
@@ -2409,6 +2512,7 @@ class DSB_Admin {
 			<?php esc_html_e( 'Manage this member\'s profile photos. The first photo is shown as their main photo. Drag the "Set Main" button to promote a photo, or remove photos that should no longer appear on their profile.', 'dating-site-builder' ); ?>
 		</p>
 		<?php wp_nonce_field( 'dsb_user_photos_' . $user->ID, 'dsb_user_photos_nonce' ); ?>
+		<input type="hidden" name="dsb_user_photos_form" value="1">
 		<table class="form-table" role="presentation">
 			<tr>
 				<th scope="row"><?php esc_html_e( 'Profile Photos', 'dating-site-builder' ); ?></th>
@@ -2576,6 +2680,14 @@ class DSB_Admin {
 		if ( ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['dsb_user_photos_nonce'] ) ), 'dsb_user_photos_' . $user_id ) ) {
 			return;
 		}
+		// Refuse to touch dsb_photos meta unless the photo manager UI
+		// was actually rendered as part of this form submission. This
+		// prevents the existing photo list from being silently wiped
+		// when another plugin or partial form posts the user-edit page
+		// without the dating profile section visible.
+		if ( empty( $_POST['dsb_user_photos_form'] ) ) {
+			return;
+		}
 
 		$max_photos = (int) get_option( 'dsb_max_photos', 10 );
 		if ( $max_photos < 1 ) {
@@ -2595,6 +2707,19 @@ class DSB_Admin {
 			$clean[] = $url;
 			if ( count( $clean ) >= $max_photos ) {
 				break;
+			}
+		}
+
+		// Extra safety net: if the submitted form somehow has zero
+		// valid photo URLs but the user already has photos stored,
+		// keep the existing photos rather than wiping them. The admin
+		// can still clear photos one-by-one with the explicit
+		// "Remove" button (which removes the hidden input via JS and
+		// triggers a non-empty submission for the survivors).
+		if ( empty( $clean ) ) {
+			$existing = get_user_meta( $user_id, 'dsb_photos', true );
+			if ( ! empty( $existing ) && is_array( $existing ) ) {
+				return;
 			}
 		}
 
@@ -2619,24 +2744,34 @@ class DSB_Admin {
 			return;
 		}
 
-		$fields = DSB_Profile_Fields::get_all_fields();
+		$fields = DSB_Profile_Fields::get_edit_fields();
 		if ( empty( $fields ) ) {
 			return;
 		}
+		$profile_kind_value = (string) get_user_meta( $user->ID, 'dsb_profile_kind', true );
+		$is_couple_profile  = 0 === strpos( $profile_kind_value, 'couple_' );
 		?>
 		<h2><?php esc_html_e( 'Dating Profile Fields', 'dating-site-builder' ); ?></h2>
 		<p class="description">
 			<?php esc_html_e( 'Edit any of this member\'s dating profile fields below. Useful for moderating inappropriate content — changes save when you click "Update User" / "Update Profile".', 'dating-site-builder' ); ?>
 		</p>
 		<?php wp_nonce_field( 'dsb_user_fields_' . $user->ID, 'dsb_user_fields_nonce' ); ?>
+		<input type="hidden" name="dsb_user_fields_form" value="1">
 		<table class="form-table" role="presentation">
 			<?php foreach ( $fields as $field_key => $field ) :
 				$value     = get_user_meta( $user->ID, 'dsb_' . $field_key, true );
 				$field_id  = 'dsb_field_' . $field_key;
 				$type      = isset( $field['type'] ) ? $field['type'] : 'text';
 				$maxlen    = ! empty( $field['maxlength'] ) ? (int) $field['maxlength'] : 0;
+				$row_attrs = '';
+				if ( ! empty( $field['requires_couple'] ) ) {
+					$row_attrs = ' data-requires-couple="1"';
+					if ( ! $is_couple_profile ) {
+						$row_attrs .= ' style="display:none;"';
+					}
+				}
 				?>
-				<tr>
+				<tr<?php echo $row_attrs; ?>>
 					<th scope="row">
 						<label for="<?php echo esc_attr( $field_id ); ?>">
 							<?php echo esc_html( $field['label'] ); ?>
@@ -2721,6 +2856,18 @@ class DSB_Admin {
 				</tr>
 			<?php endforeach; ?>
 		</table>
+		<script>
+		jQuery(function($){
+			function dsbToggleAdminCoupleFields() {
+				var value = $('#dsb_field_profile_kind').val() || '';
+				var couple = value.indexOf('couple_') === 0;
+				$('tr[data-requires-couple="1"]').toggle(couple);
+			}
+
+			dsbToggleAdminCoupleFields();
+			$(document).on('change', '#dsb_field_profile_kind', dsbToggleAdminCoupleFields);
+		});
+		</script>
 		<?php
 	}
 
@@ -2739,6 +2886,13 @@ class DSB_Admin {
 			return;
 		}
 		if ( ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['dsb_user_fields_nonce'] ) ), 'dsb_user_fields_' . $user_id ) ) {
+			return;
+		}
+		// Refuse to touch any dating profile meta unless the dating
+		// fields UI was actually rendered as part of this submission.
+		// Avoids silently clearing checkbox arrays when another plugin
+		// posts the user-edit form without our section visible.
+		if ( empty( $_POST['dsb_user_fields_form'] ) ) {
 			return;
 		}
 

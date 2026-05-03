@@ -53,11 +53,52 @@ class DSB_Profile_Fields {
 	}
 
 	/**
+	 * Get profile-edit fields in UI order.
+	 *
+	 * Couple-only partner fields are moved directly beneath the
+	 * "I am / We are" selector so the editor matches the wording
+	 * that those fields are unlocked "below" when a couple option
+	 * is selected.
+	 *
+	 * @return array Ordered field definitions for edit screens.
+	 */
+	public static function get_edit_fields() {
+		$fields         = self::get_all_fields();
+		$partner_fields = array();
+		$primary_fields = array();
+
+		foreach ( $fields as $field_key => $field ) {
+			if ( ! empty( $field['requires_couple'] ) ) {
+				$partner_fields[ $field_key ] = $field;
+				continue;
+			}
+
+			$primary_fields[ $field_key ] = $field;
+		}
+
+		if ( empty( $partner_fields ) || ! isset( $primary_fields['profile_kind'] ) ) {
+			return array_merge( $primary_fields, $partner_fields );
+		}
+
+		$ordered_fields = array();
+		foreach ( $primary_fields as $field_key => $field ) {
+			$ordered_fields[ $field_key ] = $field;
+
+			if ( 'profile_kind' === $field_key ) {
+				foreach ( $partner_fields as $partner_key => $partner_field ) {
+					$ordered_fields[ $partner_key ] = $partner_field;
+				}
+			}
+		}
+
+		return $ordered_fields;
+	}
+
+	/**
 	 * Basic profile fields.
 	 */
 	private static function get_basic_fields() {
 		$allow_custom_gender = get_option( 'dsb_allow_custom_gender', true );
-		$allow_multiple_interests = get_option( 'dsb_allow_multiple_interests', true );
 
 		$gender_options = array(
 			'male'   => __( 'Male', 'dating-site-builder' ),
@@ -74,7 +115,7 @@ class DSB_Profile_Fields {
 			'profile_kind' => array(
 				'label'       => __( 'I am / We are', 'dating-site-builder' ),
 				'type'        => 'select',
-				'required'    => false,
+				'required'    => true,
 				'options'     => array(
 					'male'           => __( 'Male', 'dating-site-builder' ),
 					'female'         => __( 'Female', 'dating-site-builder' ),
@@ -103,10 +144,19 @@ class DSB_Profile_Fields {
 			),
 			'looking_for' => array(
 				'label'       => __( 'Looking For', 'dating-site-builder' ),
-				'type'        => $allow_multiple_interests ? 'checkbox' : 'select',
+				'type'        => 'checkbox',
 				'required'    => true,
-				'options'     => $gender_options,
+				'options'     => array(
+					'casual_fun'         => __( 'Casual fun', 'dating-site-builder' ),
+					'ongoing_connection' => __( 'Ongoing connection', 'dating-site-builder' ),
+					'friends_first'      => __( 'Friends first', 'dating-site-builder' ),
+					'couples'            => __( 'Couples', 'dating-site-builder' ),
+					'group_experiences'  => __( 'Group experiences', 'dating-site-builder' ),
+					'online_chat_only'   => __( 'Online chat only', 'dating-site-builder' ),
+					'open_to_anything'   => __( 'Open to anything', 'dating-site-builder' ),
+				),
 				'privacy'     => true,
+				'description' => __( 'Pick everything that fits — this is the core matching driver.', 'dating-site-builder' ),
 			),
 			'relationship_status' => array(
 				'label'       => __( 'Relationship Status', 'dating-site-builder' ),
@@ -126,7 +176,7 @@ class DSB_Profile_Fields {
 			'country' => array(
 				'label'       => __( 'Country', 'dating-site-builder' ),
 				'type'        => 'text',
-				'required'    => true,
+				'required'    => false,
 				'privacy'     => false,
 			),
 			'state' => array(
@@ -136,10 +186,11 @@ class DSB_Profile_Fields {
 				'privacy'     => false,
 			),
 			'city' => array(
-				'label'       => __( 'City', 'dating-site-builder' ),
+				'label'       => __( 'City / Postcode', 'dating-site-builder' ),
 				'type'        => 'text',
-				'required'    => false,
+				'required'    => true,
 				'privacy'     => true,
+				'description' => __( 'Your city or postcode — used to surface nearby members.', 'dating-site-builder' ),
 			),
 		);
 
@@ -151,28 +202,68 @@ class DSB_Profile_Fields {
 	 */
 	private static function get_about_fields() {
 		return array(
-			'headline' => array(
-				'label'       => __( 'Profile Headline', 'dating-site-builder' ),
-				'type'        => 'text',
+			'vibe' => array(
+				'label'       => __( 'How would you describe yourself?', 'dating-site-builder' ),
+				'type'        => 'checkbox',
 				'required'    => false,
-				'maxlength'   => 100,
+				'options'     => array(
+					'adventurous' => __( 'Adventurous', 'dating-site-builder' ),
+					'laid_back'   => __( 'Laid-back', 'dating-site-builder' ),
+					'flirty'      => __( 'Flirty', 'dating-site-builder' ),
+					'discreet'    => __( 'Discreet', 'dating-site-builder' ),
+					'confident'   => __( 'Confident', 'dating-site-builder' ),
+					'curious'     => __( 'Curious', 'dating-site-builder' ),
+					'dominant'    => __( 'Dominant', 'dating-site-builder' ),
+					'submissive'  => __( 'Submissive', 'dating-site-builder' ),
+					'playful'     => __( 'Playful', 'dating-site-builder' ),
+					'open_minded' => __( 'Open-minded', 'dating-site-builder' ),
+				),
 				'privacy'     => false,
-				'description' => __( 'A short catchy headline (max 100 characters)', 'dating-site-builder' ),
+				'description' => __( 'Tick the vibes that match you. We use these instead of a free-text bio.', 'dating-site-builder' ),
 			),
-			'about_me' => array(
-				'label'       => __( 'About Me', 'dating-site-builder' ),
-				'type'        => 'textarea',
+			'interaction_style' => array(
+				'label'       => __( 'How do you like to connect?', 'dating-site-builder' ),
+				'type'        => 'checkbox',
 				'required'    => false,
-				'maxlength'   => 500,
+				'options'     => array(
+					'straight_to_point' => __( 'Straight to the point', 'dating-site-builder' ),
+					'chat_first'        => __( 'Chat first', 'dating-site-builder' ),
+					'meet_quickly'      => __( 'Meet quickly', 'dating-site-builder' ),
+					'take_it_slow'      => __( 'Take it slow', 'dating-site-builder' ),
+					'love_banter'       => __( 'Love a bit of banter', 'dating-site-builder' ),
+				),
 				'privacy'     => false,
-				'description' => __( 'Tell us about yourself (max 500 characters)', 'dating-site-builder' ),
 			),
-			'looking_for_text' => array(
-				'label'       => __( 'What I\'m Looking For', 'dating-site-builder' ),
-				'type'        => 'textarea',
+			'interests' => array(
+				'label'       => __( 'Interests', 'dating-site-builder' ),
+				'type'        => 'checkbox',
 				'required'    => false,
-				'maxlength'   => 500,
+				'options'     => array(
+					'travel'          => __( 'Travel', 'dating-site-builder' ),
+					'beach'           => __( 'Beach', 'dating-site-builder' ),
+					'fitness'         => __( 'Fitness', 'dating-site-builder' ),
+					'nightlife'       => __( 'Nightlife', 'dating-site-builder' ),
+					'food_drinks'     => __( 'Food & drinks', 'dating-site-builder' ),
+					'scavenger_hunts' => __( 'Scavenger hunts', 'dating-site-builder' ),
+					'music'           => __( 'Music', 'dating-site-builder' ),
+					'movies'          => __( 'Movies', 'dating-site-builder' ),
+					'outdoors'        => __( 'Outdoors', 'dating-site-builder' ),
+					'events'          => __( 'Events', 'dating-site-builder' ),
+				),
 				'privacy'     => false,
+			),
+			'intent_tonight' => array(
+				'label'       => __( 'Tonight I\'m…', 'dating-site-builder' ),
+				'type'        => 'select',
+				'required'    => false,
+				'options'     => array(
+					'browsing'     => __( 'Just browsing', 'dating-site-builder' ),
+					'open_to_chat' => __( 'Open to chat', 'dating-site-builder' ),
+					'looking'      => __( 'Looking to meet', 'dating-site-builder' ),
+					'spontaneous'  => __( 'Ready for something spontaneous', 'dating-site-builder' ),
+				),
+				'privacy'     => true,
+				'description' => __( 'Real-time intent — helps active members match with you right now.', 'dating-site-builder' ),
 			),
 		);
 	}
@@ -238,14 +329,6 @@ class DSB_Profile_Fields {
 	 */
 	private static function get_lifestyle_fields() {
 		return array(
-			'interests' => array(
-				'label'       => __( 'Interests & Hobbies', 'dating-site-builder' ),
-				'type'        => 'textarea',
-				'required'    => false,
-				'maxlength'   => 300,
-				'privacy'     => false,
-				'description' => __( 'Separate with commas', 'dating-site-builder' ),
-			),
 			'occupation' => array(
 				'label'       => __( 'Occupation', 'dating-site-builder' ),
 				'type'        => 'text',

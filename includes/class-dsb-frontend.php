@@ -1567,7 +1567,7 @@ class DSB_Frontend {
 
 		$user_id = get_current_user_id();
 		$user = get_userdata( $user_id );
-		$fields = DSB_Profile_Fields::get_all_fields();
+		$fields = DSB_Profile_Fields::get_edit_fields();
 
 		ob_start();
 		echo $this->render_app_header( 'profile' );
@@ -1767,9 +1767,6 @@ class DSB_Frontend {
 		$city              = get_user_meta( $user_id, 'dsb_city', true );
 		$state             = get_user_meta( $user_id, 'dsb_state', true );
 		$country           = get_user_meta( $user_id, 'dsb_country', true );
-		$headline          = get_user_meta( $user_id, 'dsb_headline', true );
-		$about_me          = get_user_meta( $user_id, 'dsb_about_me', true );
-		$looking_for_text  = get_user_meta( $user_id, 'dsb_looking_for_text', true );
 
 		// I am / We are + partner / dual-profile data.
 		$profile_kind        = get_user_meta( $user_id, 'dsb_profile_kind', true );
@@ -1807,9 +1804,6 @@ class DSB_Frontend {
 		// don't appear twice.
 		$handled_keys = array(
 			'date_of_birth',
-			'headline',
-			'about_me',
-			'looking_for_text',
 			'city',
 			'state',
 			'country',
@@ -1857,7 +1851,7 @@ class DSB_Frontend {
 			);
 		}
 
-		$has_any_text = ( $headline || $about_me || $looking_for_text || ! empty( $detail_rows ) || $location || $profile_kind_label || $has_partner_info );
+		$has_any_text = ( ! empty( $detail_rows ) || $location || $profile_kind_label || $has_partner_info );
 
 		$this->add_member_page_class();
 
@@ -1885,9 +1879,6 @@ class DSB_Frontend {
 						<?php if ( $location ) : ?>
 							<p class="dsb-profile-location"><?php echo esc_html( $location ); ?></p>
 						<?php endif; ?>
-						<?php if ( $headline ) : ?>
-							<p class="dsb-profile-headline">“<?php echo esc_html( $headline ); ?>”</p>
-						<?php endif; ?>
 					</div>
 
 					<?php if ( $user_id !== $current_user_id ) : ?>
@@ -1904,20 +1895,6 @@ class DSB_Frontend {
 							<?php esc_html_e( 'Report', 'dating-site-builder' ); ?>
 						</button>
 					</div>
-					<?php endif; ?>
-
-					<?php if ( $about_me ) : ?>
-						<section class="dsb-profile-section">
-							<h3><?php esc_html_e( 'About Me', 'dating-site-builder' ); ?></h3>
-							<p class="dsb-profile-bio"><?php echo nl2br( esc_html( $about_me ) ); ?></p>
-						</section>
-					<?php endif; ?>
-
-					<?php if ( $looking_for_text ) : ?>
-						<section class="dsb-profile-section">
-							<h3><?php esc_html_e( 'What I\'m Looking For', 'dating-site-builder' ); ?></h3>
-							<p class="dsb-profile-bio"><?php echo nl2br( esc_html( $looking_for_text ) ); ?></p>
-						</section>
 					<?php endif; ?>
 
 					<?php if ( $has_partner_info ) : ?>
@@ -2130,20 +2107,31 @@ class DSB_Frontend {
 					<?php if ( $inbox ) : ?>
 						<?php foreach ( $inbox as $conversation ) : ?>
 							<?php
-							$other_user_id = ( $conversation['sender_id'] == $user_id ) ? $conversation['receiver_id'] : $conversation['sender_id'];
+							// DSB_Messaging::get_inbox() returns stdClass rows from
+							// $wpdb->get_results(); access as object properties.
+							$other_user_id = isset( $conversation->other_user_id )
+								? (int) $conversation->other_user_id
+								: ( (int) $conversation->sender_id === (int) $user_id
+									? (int) $conversation->receiver_id
+									: (int) $conversation->sender_id );
 							$other_user = get_userdata( $other_user_id );
-							$unread_class = $conversation['unread_count'] > 0 ? 'unread' : '';
+							if ( ! $other_user ) {
+								continue;
+							}
+							$unread_count = isset( $conversation->unread_count ) ? (int) $conversation->unread_count : 0;
+							$unread_class = $unread_count > 0 ? 'unread' : '';
+							$last_message = isset( $conversation->message_text ) ? (string) $conversation->message_text : '';
 							?>
-							<a href="?conversation=<?php echo esc_attr( $other_user_id ); ?>" class="dsb-conversation-item <?php echo $unread_class; ?>" data-user-id="<?php echo esc_attr( $other_user_id ); ?>">
+							<a href="?conversation=<?php echo esc_attr( $other_user_id ); ?>" class="dsb-conversation-item <?php echo esc_attr( $unread_class ); ?>" data-user-id="<?php echo esc_attr( $other_user_id ); ?>">
 								<div class="dsb-conversation-avatar">
 									<?php echo get_avatar( $other_user_id, 48 ); ?>
 								</div>
 								<div class="dsb-conversation-info">
 									<strong><?php echo esc_html( $other_user->display_name ); ?></strong>
-									<p><?php echo esc_html( wp_trim_words( $conversation['last_message'], 8 ) ); ?></p>
+									<p><?php echo esc_html( wp_trim_words( $last_message, 8 ) ); ?></p>
 								</div>
-								<?php if ( $conversation['unread_count'] > 0 ) : ?>
-									<span class="dsb-unread-badge"><?php echo esc_html( $conversation['unread_count'] ); ?></span>
+								<?php if ( $unread_count > 0 ) : ?>
+									<span class="dsb-unread-badge"><?php echo esc_html( $unread_count ); ?></span>
 								<?php endif; ?>
 							</a>
 						<?php endforeach; ?>
@@ -2229,7 +2217,6 @@ class DSB_Frontend {
 		$age = $this->calculate_age( get_user_meta( $user_id, 'dsb_date_of_birth', true ) );
 		$city = get_user_meta( $user_id, 'dsb_city', true );
 		$country = get_user_meta( $user_id, 'dsb_country', true );
-		$headline = get_user_meta( $user_id, 'dsb_headline', true );
 		$main_photo = $this->get_main_photo( $user_id );
 		$is_liked = DSB_Likes::has_liked( get_current_user_id(), $user_id );
 
@@ -2248,9 +2235,6 @@ class DSB_Frontend {
 				<h3><?php echo esc_html( $user->display_name ); ?>, <?php echo esc_html( $age ); ?></h3>
 				<?php if ( $city || $country ) : ?>
 					<p class="dsb-member-location"><?php echo esc_html( $city ? $city . ', ' : '' ); ?><?php echo esc_html( $country ); ?></p>
-				<?php endif; ?>
-				<?php if ( $headline ) : ?>
-					<p class="dsb-member-headline"><?php echo esc_html( $headline ); ?></p>
 				<?php endif; ?>
 			</div>
 			
