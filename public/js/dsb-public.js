@@ -22,6 +22,52 @@
 			this.reportUser();
 			this.filters();
 			this.groupChat();
+			this.logoSpin();
+		},
+
+		/**
+		 * Spin the header logo when clicked, then follow the link.
+		 *
+		 * Works for both an uploaded image (.dsb-app-logo-img) and the
+		 * fallback emoji icon (.dsb-app-logo-icon). The link still
+		 * navigates to the home / browse page; we just defer the
+		 * navigation until the spin animation finishes so the user
+		 * actually sees it.
+		 */
+		logoSpin: function() {
+			$(document).on('click', '.dsb-app-logo', function(e) {
+				var $link = $(this);
+				var $target = $link.find('.dsb-app-logo-img, .dsb-app-logo-icon').first();
+				if (!$target.length) {
+					return; // No spinable element - let the link behave normally.
+				}
+				// Honour modifier keys / non-primary mouse buttons so users can
+				// still middle-click / Cmd-click the logo to open in a new tab.
+				if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || (e.which && e.which !== 1)) {
+					return;
+				}
+				if ($target.hasClass('is-spinning')) {
+					return; // Already spinning, let the previous click finish.
+				}
+				var href = $link.attr('href');
+				if (!href || href === '#') {
+					return;
+				}
+				e.preventDefault();
+				$target.addClass('is-spinning');
+				var navigated = false;
+				var go = function() {
+					if (navigated) {
+						return;
+					}
+					navigated = true;
+					window.location.href = href;
+				};
+				$target.one('animationend webkitAnimationEnd', go);
+				// Fallback in case the animationend event doesn't fire
+				// (e.g. element removed, prefers-reduced-motion).
+				setTimeout(go, 700);
+			});
 		},
 
 		/**

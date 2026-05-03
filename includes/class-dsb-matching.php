@@ -74,26 +74,11 @@ class DSB_Matching {
 			'relation' => 'AND',
 		);
 
-		// Must be interested in user's gender
-		$user_gender = $user_prefs['gender'];
-		$looking_for = $user_prefs['looking_for'];
-
-		// Orientation compatibility
-		if ( ! empty( $looking_for ) ) {
-			if ( is_array( $looking_for ) ) {
-				$meta_query[] = array(
-					'key'     => 'dsb_gender',
-					'value'   => $looking_for,
-					'compare' => 'IN',
-				);
-			} else {
-				$meta_query[] = array(
-					'key'     => 'dsb_gender',
-					'value'   => $looking_for,
-					'compare' => '=',
-				);
-			}
-		}
+		// `looking_for` is now a multi-select of connection types
+		// (casual_fun, ongoing_connection, ...), no longer a gender filter.
+		// We rely on calculate_match_score()'s shared-interest check
+		// instead of a hard meta filter so members aren't excluded simply
+		// because they haven't picked overlapping looking_for values yet.
 
 		// Location filtering
 		if ( ! empty( $user_prefs['block_other_countries'] ) && $user_prefs['block_other_countries'] === 'yes' ) {
@@ -210,31 +195,33 @@ class DSB_Matching {
 	}
 
 	/**
-	 * Check if two users are orientation-compatible.
+	 * Check if two users share at least one "Looking For" connection
+	 * type (casual_fun, ongoing_connection, etc.). "Open to anything"
+	 * counts as a wildcard that matches any other selection.
 	 */
 	private static function check_orientation_compatibility( $user1_prefs, $user2_prefs ) {
-		$user1_gender = $user1_prefs['gender'];
-		$user1_looking_for = $user1_prefs['looking_for'];
-		$user2_gender = $user2_prefs['gender'];
-		$user2_looking_for = $user2_prefs['looking_for'];
+		$normalize = static function ( $value ) {
+			if ( is_array( $value ) ) {
+				return array_values( array_filter( array_map( 'strval', $value ), 'strlen' ) );
+			}
+			return ( '' === $value || null === $value ) ? array() : array( (string) $value );
+		};
 
-		// Check if user1 is looking for user2's gender
-		$user1_interested = false;
-		if ( is_array( $user1_looking_for ) ) {
-			$user1_interested = in_array( $user2_gender, $user1_looking_for );
-		} else {
-			$user1_interested = ( $user1_looking_for === $user2_gender );
+		$u1 = $normalize( $user1_prefs['looking_for'] );
+		$u2 = $normalize( $user2_prefs['looking_for'] );
+
+		// If either side hasn't picked anything yet we can't say they're
+		// incompatible — give the score the benefit of the doubt so new
+		// members still surface in matches.
+		if ( empty( $u1 ) || empty( $u2 ) ) {
+			return true;
 		}
 
-		// Check if user2 is looking for user1's gender
-		$user2_interested = false;
-		if ( is_array( $user2_looking_for ) ) {
-			$user2_interested = in_array( $user1_gender, $user2_looking_for );
-		} else {
-			$user2_interested = ( $user2_looking_for === $user1_gender );
+		if ( in_array( 'open_to_anything', $u1, true ) || in_array( 'open_to_anything', $u2, true ) ) {
+			return true;
 		}
 
-		return $user1_interested && $user2_interested;
+		return ! empty( array_intersect( $u1, $u2 ) );
 	}
 
 	/**
@@ -296,17 +283,36 @@ class DSB_Matching {
 
 	/**
 	 * Calculate interests compatibility score (0-1).
+	 *
+	 * Interests are now stored as arrays of option keys from the
+	 * "Interests" checkbox group. Older accounts may still have a
+	 * comma-separated string stored, so we accept both shapes.
 	 */
 	private static function calculate_interests_score( $interests1, $interests2 ) {
-		if ( empty( $interests1 ) || empty( $interests2 ) ) {
+		$normalize = static function ( $value ) {
+			if ( is_array( $value ) ) {
+				$out = array();
+				foreach ( $value as $item ) {
+					$item = strtolower( trim( (string) $item ) );
+					if ( '' !== $item ) {
+						$out[] = $item;
+					}
+				}
+				return $out;
+			}
+			if ( is_string( $value ) && '' !== $value ) {
+				return array_values( array_filter( array_map( 'trim', explode( ',', strtolower( $value ) ) ), 'strlen' ) );
+			}
+			return array();
+		};
+
+		$interests1_arr = $normalize( $interests1 );
+		$interests2_arr = $normalize( $interests2 );
+
+		if ( empty( $interests1_arr ) || empty( $interests2_arr ) ) {
 			return 0;
 		}
 
-		// Convert to arrays of interests
-		$interests1_arr = array_map( 'trim', explode( ',', strtolower( $interests1 ) ) );
-		$interests2_arr = array_map( 'trim', explode( ',', strtolower( $interests2 ) ) );
-
-		// Find common interests
 		$common = array_intersect( $interests1_arr, $interests2_arr );
 		$total_unique = count( array_unique( array_merge( $interests1_arr, $interests2_arr ) ) );
 
