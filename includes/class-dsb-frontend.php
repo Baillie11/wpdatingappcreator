@@ -1456,37 +1456,64 @@ class DSB_Frontend {
 	 */
 	public function shortcode_login( $atts ) {
 		if ( is_user_logged_in() ) {
-			// Redirect logged-in users to Browse Members, but never to
-			// ourselves – that would create an infinite redirect loop if
-			// the option is missing or mis-configured.
-			$directory_id   = (int) get_option( 'dsb_member_directory_page' );
-			$login_page_id  = (int) get_option( 'dsb_login_page' );
-			$current_id     = (int) get_queried_object_id();
-			$dashboard_url  = $directory_id ? get_permalink( $directory_id ) : '';
+			// Resolve where the logged-in member should actually land.
+			// Using get_dsb_page_url() guarantees a real URL even when
+			// the option is empty / trashed (it falls back to the slug
+			// and finally to home_url('/members/')) so the Continue
+			// link can never collapse to the current page.
+			$dashboard_url = $this->get_dsb_page_url( 'dsb_member_directory_page', 'members' );
 
-			$is_same_page = (
-				! $directory_id
-				|| $directory_id === $login_page_id
-				|| $directory_id === $current_id
-				|| empty( $dashboard_url )
-				|| trailingslashit( $dashboard_url ) === trailingslashit( ( is_ssl() ? 'https://' : 'http://' ) . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'] )
-			);
+			// Build the canonical "current URL" stripped of query string
+			// and trailing-slash differences for a clean comparison.
+			$normalize = static function ( $url ) {
+				$parts = wp_parse_url( (string) $url );
+				if ( ! $parts ) {
+					return (string) $url;
+				}
+				$scheme = isset( $parts['scheme'] ) ? $parts['scheme'] . '://' : '';
+				$host   = isset( $parts['host'] )   ? strtolower( $parts['host'] ) : '';
+				$path   = isset( $parts['path'] )   ? $parts['path'] : '/';
+				return trailingslashit( $scheme . $host . $path );
+			};
+
+			$current_url = ( is_ssl() ? 'https://' : 'http://' )
+				. ( isset( $_SERVER['HTTP_HOST'] ) ? wp_unslash( $_SERVER['HTTP_HOST'] ) : '' )
+				. ( isset( $_SERVER['REQUEST_URI'] ) ? wp_unslash( $_SERVER['REQUEST_URI'] ) : '' );
+
+			$is_same_page = empty( $dashboard_url )
+				|| $normalize( $dashboard_url ) === $normalize( $current_url );
 
 			if ( ! $is_same_page ) {
 				if ( ! headers_sent() ) {
 					wp_safe_redirect( $dashboard_url );
 					exit;
 				}
-				return '<script>window.location.href = "' . esc_url( $dashboard_url ) . '";</script>
-					<p>' . sprintf( __( 'Redirecting... <a href="%s">Click here</a> if not redirected.', 'dating-site-builder' ), esc_url( $dashboard_url ) ) . '</p>';
+				return '<script>window.location.href = "' . esc_url( $dashboard_url ) . '";</script>'
+					. '<p>' . sprintf( __( 'Redirecting... <a href="%s">Click here</a> if not redirected.', 'dating-site-builder' ), esc_url( $dashboard_url ) ) . '</p>';
 			}
 
-			// Same-page fallback: don't redirect, show a friendly link
-			// so the user can always escape this page.
-			$fallback_url = $dashboard_url ? $dashboard_url : home_url( '/' );
+			// Same-page fallback: the resolved directory URL is the
+			// page we're already on (e.g. front page is the Login page
+			// AND the directory option is missing, so the helper landed
+			// on the same slug). Send the member to their profile
+			// editor instead - that is always a different URL - and
+			// fall back to a bare log-out prompt only if the profile
+			// page is also misconfigured.
+			$profile_url = $this->get_dsb_page_url( 'dsb_profile_edit_page', 'profile-edit' );
+			if ( $profile_url && $normalize( $profile_url ) === $normalize( $current_url ) ) {
+				$profile_url = '';
+			}
+
+			if ( $profile_url ) {
+				return '<p>' . sprintf(
+					__( 'You are already logged in. <a href="%s">Go to your profile</a> or <a href="%s">log out</a>.', 'dating-site-builder' ),
+					esc_url( $profile_url ),
+					esc_url( wp_logout_url( home_url() ) )
+				) . '</p>';
+			}
+
 			return '<p>' . sprintf(
-				__( 'You are already logged in. <a href="%s">Continue</a> or <a href="%s">log out</a>.', 'dating-site-builder' ),
-				esc_url( $fallback_url ),
+				__( 'You are already logged in. <a href="%s">Log out</a> to switch accounts.', 'dating-site-builder' ),
 				esc_url( wp_logout_url( home_url() ) )
 			) . '</p>';
 		}
