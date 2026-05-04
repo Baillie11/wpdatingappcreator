@@ -34,6 +34,7 @@ class DSB_Core {
 		require_once DSB_PLUGIN_DIR . 'includes/class-dsb-messaging.php';
 		require_once DSB_PLUGIN_DIR . 'includes/class-dsb-likes.php';
 		require_once DSB_PLUGIN_DIR . 'includes/class-dsb-group-chat.php';
+		require_once DSB_PLUGIN_DIR . 'includes/class-dsb-stats.php';
 
 		// Admin classes
 		require_once DSB_PLUGIN_DIR . 'includes/class-dsb-admin.php';
