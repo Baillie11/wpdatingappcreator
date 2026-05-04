@@ -27,6 +27,21 @@ _No unreleased changes._
 
 ---
 
+## [1.6.1] — 2026-05-04
+
+### Fixed
+- Logged-in members landing on the Login page (which doubles as the front
+  page) saw a dead-end "You are already logged in. Continue or log out"
+  message whose **Continue** link reloaded the same page, doing nothing
+  visible. `shortcode_login()` in `includes/class-dsb-frontend.php` now
+  resolves the destination via `get_dsb_page_url()` (so the URL falls back
+  to a real `/members/` slug even if the option is missing or trashed),
+  normalises both URLs before comparing, and — if the directory still
+  resolves to the current page — sends the visitor to their profile editor
+  instead. The bare "log out" prompt is kept only as a last-resort fallback.
+
+---
+
 ## [1.6.0] — 2026-05-03
 
 A focused release that streamlines the member profile UX, modernises matching,
@@ -184,6 +199,7 @@ Initial public release.
 ---
 
 [Unreleased]: #unreleased
+[1.6.1]: #161--2026-05-04
 [1.6.0]: #160--2026-05-03
 [1.5.1]: #151--2026-04-28
 [1.5.0]: #150--2026-04-28
