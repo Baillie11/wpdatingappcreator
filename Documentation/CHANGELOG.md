@@ -27,6 +27,39 @@ _No unreleased changes._
 
 ---
 
+## [1.7.0] — 2026-05-04
+
+### Added
+- **Public site stats** — a new `DSB_Stats` helper class
+  (`includes/class-dsb-stats.php`) holds the single source of truth for
+  every metric the plugin can surface, with a 60-second transient cache so
+  high-traffic public pages don't hammer the database.
+- **`[dsb_site_stats]` shortcode** (`includes/class-dsb-frontend.php`):
+  drop it on any page or widget to render a responsive grid of the metrics
+  the admin has enabled. Accepts a `show_sub` attribute (default `true`)
+  to hide the descriptive sub-labels.
+- **Site-pulse banner above the Browse Members directory**: the
+  `[dsb_member_directory]` shortcode now renders the same enabled stats in
+  a compact strip above the heading, so logged-in members see live
+  activity at a glance.
+- **Per-stat toggles in Settings** (`includes/class-dsb-admin.php`): a new
+  *Public Stats Display* section exposes a checkbox for every public stat
+  (Online Now, In Chat Room, Messages Today, Total Members, Premium
+  Members, New This Week, Total Likes, Mutual Matches, Profile Views,
+  Messages Sent). Defaults are conservative — Online Now, In Chat Room,
+  Total Members, New This Week, and Mutual Matches are enabled out of the
+  box. Saving the settings page busts the stats transient so changes are
+  visible immediately on the front end.
+- Public stats CSS in `public/css/dsb-public.css` with tone-coloured
+  left-border accents matching the admin Dashboard cards.
+
+### Notes
+- Moderation counters (Pending Approvals, Pending Reports) are flagged
+  `admin_only` in the helper and cannot be exposed publicly even if the
+  option is hand-edited.
+
+---
+
 ## [1.6.1] — 2026-05-04
 
 ### Fixed
@@ -199,6 +232,7 @@ Initial public release.
 ---
 
 [Unreleased]: #unreleased
+[1.7.0]: #170--2026-05-04
 [1.6.1]: #161--2026-05-04
 [1.6.0]: #160--2026-05-03
 [1.5.1]: #151--2026-04-28

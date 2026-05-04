@@ -1941,6 +1941,7 @@ class DSB_Admin {
 		$array_options = array(
 			'dsb_enabled_field_groups',
 			'dsb_accessibility_fields',
+			'dsb_public_stats_enabled',
 		);
 		foreach ( $array_options as $opt ) {
 			$value = isset( $_POST[ $opt ] ) && is_array( $_POST[ $opt ] )
@@ -1948,6 +1949,10 @@ class DSB_Admin {
 				: array();
 			update_option( $opt, $value );
 		}
+
+		// Bust the public stats transient so the new selection is
+		// visible immediately on the front end.
+		delete_transient( DSB_Stats::CACHE_KEY );
 
 		// Apply the chosen Site Logo as the WordPress Site Icon, the
 		// same way the wizard does on completion. No-op when the
@@ -2006,6 +2011,7 @@ class DSB_Admin {
 		$enable_blocking        = get_option( 'dsb_enable_blocking', true );
 		$enable_reporting       = get_option( 'dsb_enable_reporting', true );
 		$membership_enabled     = (bool) get_option( 'dsb_membership_enabled', false );
+		$enabled_public_stats   = DSB_Stats::get_enabled_public_keys();
 		?>
 		<div class="wrap">
 			<h1><?php esc_html_e( 'Dating Site Settings', 'dating-site-builder' ); ?></h1>
@@ -2384,6 +2390,44 @@ class DSB_Admin {
 								</p>
 							</td>
 						</tr>
+					</table>
+				</div>
+
+				<div class="dsb-settings-section">
+					<h2><?php esc_html_e( 'Public Stats Display', 'dating-site-builder' ); ?></h2>
+					<p class="description">
+						<?php
+						printf(
+							/* translators: %s: shortcode example */
+							esc_html__( 'Choose which metrics appear in the slim banner above the Browse Members directory and inside the %s shortcode. Moderation counters (pending approvals, pending reports) are admin-only and never shown publicly.', 'dating-site-builder' ),
+							'<code>[dsb_site_stats]</code>'
+						);
+						?>
+					</p>
+					<table class="form-table">
+						<?php
+						foreach ( DSB_Stats::get_definitions() as $stat_key => $stat_def ) :
+							if ( ! empty( $stat_def['admin_only'] ) ) {
+								continue;
+							}
+							$is_on = in_array( $stat_key, $enabled_public_stats, true );
+							?>
+							<tr>
+								<th scope="row">
+									<span aria-hidden="true" style="font-size:1.1em;margin-right:4px;"><?php echo esc_html( $stat_def['icon'] ); ?></span>
+									<?php echo esc_html( $stat_def['label'] ); ?>
+								</th>
+								<td>
+									<label>
+										<input type="checkbox" name="dsb_public_stats_enabled[]" value="<?php echo esc_attr( $stat_key ); ?>" <?php checked( $is_on ); ?>>
+										<?php esc_html_e( 'Show on public pages', 'dating-site-builder' ); ?>
+									</label>
+									<?php if ( ! empty( $stat_def['sub'] ) ) : ?>
+										<p class="description"><?php echo esc_html( $stat_def['sub'] ); ?></p>
+									<?php endif; ?>
+								</td>
+							</tr>
+						<?php endforeach; ?>
 					</table>
 				</div>
 

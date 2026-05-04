@@ -1063,6 +1063,29 @@ class DSB_Frontend {
 		add_shortcode( 'dsb_logout', array( $this, 'shortcode_logout' ) );
 		add_shortcode( 'dsb_member_nav', array( $this, 'shortcode_member_nav' ) );
 		add_shortcode( 'dsb_group_chat', array( $this, 'shortcode_group_chat' ) );
+		add_shortcode( 'dsb_site_stats', array( $this, 'shortcode_site_stats' ) );
+	}
+
+	/**
+	 * Public site stats shortcode.
+	 *
+	 * Renders only the metrics the admin has enabled under
+	 * Settings > Public Stats Display. Safe to drop on any page,
+	 * widget, or block.
+	 *
+	 * Attributes:
+	 *   show_sub  "true" (default) | "false" - whether each card
+	 *             includes its descriptive sub-label.
+	 */
+	public function shortcode_site_stats( $atts ) {
+		$atts = shortcode_atts( array(
+			'show_sub' => 'true',
+		), $atts, 'dsb_site_stats' );
+
+		return DSB_Stats::render_public_grid( array(
+			'wrapper_class' => 'dsb-public-stats dsb-public-stats-shortcode',
+			'show_sub'      => filter_var( $atts['show_sub'], FILTER_VALIDATE_BOOLEAN ),
+		) );
 	}
 
 	/**
@@ -2027,6 +2050,15 @@ class DSB_Frontend {
 		?>
 		<div class="dsb-app-content">
 		<div class="dsb-member-directory-wrapper">
+			<?php
+			// Slim site-pulse banner above the directory header. Only
+			// renders if the admin has enabled at least one public stat
+			// under Settings > Public Stats Display.
+			echo DSB_Stats::render_public_grid( array(
+				'wrapper_class' => 'dsb-public-stats dsb-directory-stats',
+				'show_sub'      => false,
+			) );
+			?>
 			<div class="dsb-directory-header">
 				<h2><?php _e( 'Browse Members', 'dating-site-builder' ); ?></h2>
 				<div class="dsb-directory-filters">
