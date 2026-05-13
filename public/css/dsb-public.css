@@ -470,17 +470,38 @@
 	flex: 1;
 	padding: 0.375rem 0.625rem;
 	background: var(--dsb-bg-card);
-	border: none;
+	border: 1px solid rgba(15, 23, 42, 0.18);
 	border-radius: 0.25rem;
 	font-size: 0.75rem;
 	font-weight: 600;
+	color: #1f2937 !important;
+	text-shadow: none !important;
 	cursor: pointer;
 	transition: var(--dsb-transition);
 }
 
 .dsb-photo-actions button:hover {
 	background: var(--dsb-primary);
-	color: white;
+	color: #ffffff !important;
+}
+
+/* Extra specificity for profile edit photo controls so theme-level
+   button styles cannot force white text on light button backgrounds. */
+.dsb-profile-edit-wrapper .dsb-photo-actions button,
+.dsb-profile-edit-wrapper .dsb-toggle-photo-privacy,
+.dsb-profile-edit-wrapper .dsb-set-main-photo,
+.dsb-profile-edit-wrapper .dsb-delete-photo {
+	color: #1f2937 !important;
+	background-color: #ffffff !important;
+	border: 1px solid rgba(15, 23, 42, 0.18) !important;
+}
+
+.dsb-profile-edit-wrapper .dsb-photo-actions button:hover,
+.dsb-profile-edit-wrapper .dsb-toggle-photo-privacy:hover,
+.dsb-profile-edit-wrapper .dsb-set-main-photo:hover,
+.dsb-profile-edit-wrapper .dsb-delete-photo:hover {
+	color: #ffffff !important;
+	border-color: var(--dsb-primary) !important;
 }
 
 /* Private photo overlay (blur + lock icon) */
@@ -550,6 +571,7 @@
 	border: none !important;
 	font-size: 0.7rem !important;
 	font-weight: 600 !important;
+	color: #1f2937 !important;
 	padding: 0.25rem 0.5rem !important;
 	border-radius: 0.25rem !important;
 	cursor: pointer;
@@ -836,6 +858,14 @@
 	margin: 0 0 0.5rem;
 }
 
+.dsb-profile-member-number {
+	color: var(--dsb-text-secondary);
+	font-size: 0.85rem;
+	margin: 0;
+	font-weight: 500;
+	letter-spacing: 0.03em;
+}
+
 .dsb-profile-headline {
 	color: var(--dsb-text-primary);
 	font-size: 1rem;
@@ -1106,6 +1136,7 @@
 	font-size: 1.5rem !important;
 	display: inline-block !important;
 	transform-origin: 50% 50% !important;
+	backface-visibility: hidden !important;
 }
 
 /* Click-to-spin animation for the header logo. Triggered by the
@@ -1113,18 +1144,20 @@
    emoji/text icon, then navigates to the home link once the
    animation finishes. */
 @keyframes dsb-logo-spin {
-	from { transform: rotate(0deg); }
-	to   { transform: rotate(360deg); }
+	from { transform: rotateX(0deg); }
+	to   { transform: rotateX(360deg); }
 }
 
 .dsb-app-logo-img.is-spinning,
 .dsb-app-logo-icon.is-spinning {
 	animation: dsb-logo-spin 0.6s ease-in-out;
 	will-change: transform;
+	backface-visibility: hidden;
 }
 
 .dsb-app-logo-img {
 	transform-origin: 50% 50% !important;
+	backface-visibility: hidden !important;
 }
 
 .dsb-app-logo-img {

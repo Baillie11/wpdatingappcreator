@@ -1906,6 +1906,21 @@ class DSB_Frontend {
 			$this->track_profile_view( $user_id, $current_user_id );
 		}
 
+		// Get member number and total count
+		global $wpdb;
+		$total_members = count_users();
+		$total_dating_members = isset( $total_members['avail_roles']['dating_member'] ) ? $total_members['avail_roles']['dating_member'] : 0;
+		$total_dating_members += isset( $total_members['avail_roles']['dating_premium'] ) ? $total_members['avail_roles']['dating_premium'] : 0;
+
+		// Get member position (ordinal number based on user_id)
+		$member_position = $wpdb->get_var( $wpdb->prepare(
+			"SELECT COUNT(*) FROM $wpdb->users u
+			INNER JOIN $wpdb->usermeta um ON u.ID = um.user_id
+			WHERE um.meta_key = 'dsb_profile_kind'
+			AND u.ID <= %d",
+			$user_id
+		) );
+
 		$fields            = DSB_Profile_Fields::get_all_fields();
 		$age               = $this->calculate_age( get_user_meta( $user_id, 'dsb_date_of_birth', true ) );
 		$city              = get_user_meta( $user_id, 'dsb_city', true );
@@ -2048,6 +2063,11 @@ class DSB_Frontend {
 						<?php if ( $location ) : ?>
 							<p class="dsb-profile-location"><?php echo esc_html( $location ); ?></p>
 						<?php endif; ?>
+						<?php if ( $member_position && $total_dating_members ) : ?>
+							<p class="dsb-profile-member-number">
+								<?php printf( esc_html__( 'Member %d of %d', 'dating-site-builder' ), esc_html( $member_position ), esc_html( $total_dating_members ) ); ?>
+							</p>
+						<?php endif; ?>
 					</div>
 
 					<?php if ( $user_id !== $current_user_id ) : ?>
@@ -2172,6 +2192,38 @@ class DSB_Frontend {
 		$current_user_id = get_current_user_id();
 		$paged = get_query_var( 'paged' ) ? get_query_var( 'paged' ) : 1;
 
+		// Directory filters (query-string driven).
+		$profile_kind = isset( $_GET['profile_kind'] ) ? sanitize_key( wp_unslash( $_GET['profile_kind'] ) ) : '';
+		if ( '' === $profile_kind && isset( $_GET['gender'] ) ) {
+			// Backward compatibility for old links that used ?gender=.
+			$profile_kind = sanitize_key( wp_unslash( $_GET['gender'] ) );
+		}
+		$age_min_raw = isset( $_GET['age_min'] ) ? intval( $_GET['age_min'] ) : 0;
+		$age_max_raw = isset( $_GET['age_max'] ) ? intval( $_GET['age_max'] ) : 0;
+		$location    = isset( $_GET['location'] ) ? sanitize_text_field( wp_unslash( $_GET['location'] ) ) : '';
+
+		$age_min = $age_min_raw > 0 ? max( 18, min( 99, $age_min_raw ) ) : 0;
+		$age_max = $age_max_raw > 0 ? max( 18, min( 99, $age_max_raw ) ) : 0;
+		if ( $age_min && $age_max && $age_min > $age_max ) {
+			$temp    = $age_min;
+			$age_min = $age_max;
+			$age_max = $temp;
+		}
+
+		$profile_kind_options = array(
+			'male'           => __( 'Male', 'dating-site-builder' ),
+			'female'         => __( 'Female', 'dating-site-builder' ),
+			'couple_mf'      => __( 'Couples (Male & Female)', 'dating-site-builder' ),
+			'couple_ff'      => __( 'Couple (Female & Female)', 'dating-site-builder' ),
+			'couple_mm'      => __( 'Couple (Male & Male)', 'dating-site-builder' ),
+			'group'          => __( 'Groups', 'dating-site-builder' ),
+			'gender_diverse' => __( 'Gender Diverse', 'dating-site-builder' ),
+		);
+
+		if ( $profile_kind && ! isset( $profile_kind_options[ $profile_kind ] ) ) {
+			$profile_kind = '';
+		}
+
 		// Build user query
 		$args = array(
 			'role__in' => array( 'dating_member', 'dating_premium' ),
@@ -2191,6 +2243,65 @@ class DSB_Frontend {
 				),
 			),
 		);
+
+		if ( $profile_kind ) {
+			$args['meta_query'][] = array(
+				'key'     => 'dsb_profile_kind',
+				'value'   => $profile_kind,
+				'compare' => '=',
+			);
+		}
+
+		if ( $age_min || $age_max ) {
+			$today = gmdate( 'Y-m-d' );
+			if ( $age_min && $age_max ) {
+				$dob_latest   = gmdate( 'Y-m-d', strtotime( '-' . $age_min . ' years', strtotime( $today ) ) );
+				$dob_earliest = gmdate( 'Y-m-d', strtotime( '-' . $age_max . ' years', strtotime( $today ) ) );
+				$args['meta_query'][] = array(
+					'key'     => 'dsb_date_of_birth',
+					'value'   => array( $dob_earliest, $dob_latest ),
+					'compare' => 'BETWEEN',
+					'type'    => 'DATE',
+				);
+			} elseif ( $age_min ) {
+				$dob_latest = gmdate( 'Y-m-d', strtotime( '-' . $age_min . ' years', strtotime( $today ) ) );
+				$args['meta_query'][] = array(
+					'key'     => 'dsb_date_of_birth',
+					'value'   => $dob_latest,
+					'compare' => '<=',
+					'type'    => 'DATE',
+				);
+			} else {
+				$dob_earliest = gmdate( 'Y-m-d', strtotime( '-' . $age_max . ' years', strtotime( $today ) ) );
+				$args['meta_query'][] = array(
+					'key'     => 'dsb_date_of_birth',
+					'value'   => $dob_earliest,
+					'compare' => '>=',
+					'type'    => 'DATE',
+				);
+			}
+		}
+
+		if ( '' !== $location ) {
+			$args['meta_query'][] = array(
+				'relation' => 'OR',
+				array(
+					'key'     => 'dsb_city',
+					'value'   => $location,
+					'compare' => 'LIKE',
+				),
+				array(
+					'key'     => 'dsb_state',
+					'value'   => $location,
+					'compare' => 'LIKE',
+				),
+				array(
+					'key'     => 'dsb_country',
+					'value'   => $location,
+					'compare' => 'LIKE',
+				),
+			);
+		}
 
 		$user_query = new WP_User_Query( $args );
 		$users = $user_query->get_results();
@@ -2213,15 +2324,17 @@ class DSB_Frontend {
 			<div class="dsb-directory-header">
 				<h2><?php _e( 'Browse Members', 'dating-site-builder' ); ?></h2>
 				<div class="dsb-directory-filters">
-					<select id="dsb-filter-gender" class="dsb-filter">
-						<option value=""><?php _e( 'All Genders', 'dating-site-builder' ); ?></option>
-						<option value="male"><?php _e( 'Male', 'dating-site-builder' ); ?></option>
-						<option value="female"><?php _e( 'Female', 'dating-site-builder' ); ?></option>
-						<option value="non-binary"><?php _e( 'Non-binary', 'dating-site-builder' ); ?></option>
+					<select id="dsb-filter-profile-kind" class="dsb-filter">
+						<option value=""><?php _e( 'All Member Types', 'dating-site-builder' ); ?></option>
+						<?php foreach ( $profile_kind_options as $opt_key => $opt_label ) : ?>
+							<option value="<?php echo esc_attr( $opt_key ); ?>" <?php selected( $profile_kind, $opt_key ); ?>>
+								<?php echo esc_html( $opt_label ); ?>
+							</option>
+						<?php endforeach; ?>
 					</select>
-					<input type="number" id="dsb-filter-age-min" class="dsb-filter" placeholder="<?php _e( 'Min age', 'dating-site-builder' ); ?>" min="18" max="99" />
-					<input type="number" id="dsb-filter-age-max" class="dsb-filter" placeholder="<?php _e( 'Max age', 'dating-site-builder' ); ?>" min="18" max="99" />
-					<input type="text" id="dsb-filter-location" class="dsb-filter" placeholder="<?php _e( 'Location', 'dating-site-builder' ); ?>" />
+					<input type="number" id="dsb-filter-age-min" class="dsb-filter" placeholder="<?php _e( 'Min age', 'dating-site-builder' ); ?>" min="18" max="99" value="<?php echo $age_min ? esc_attr( $age_min ) : ''; ?>" />
+					<input type="number" id="dsb-filter-age-max" class="dsb-filter" placeholder="<?php _e( 'Max age', 'dating-site-builder' ); ?>" min="18" max="99" value="<?php echo $age_max ? esc_attr( $age_max ) : ''; ?>" />
+					<input type="text" id="dsb-filter-location" class="dsb-filter" placeholder="<?php _e( 'Location', 'dating-site-builder' ); ?>" value="<?php echo esc_attr( $location ); ?>" />
 					<button class="dsb-btn dsb-btn-primary" id="dsb-apply-filters"><?php _e( 'Filter', 'dating-site-builder' ); ?></button>
 				</div>
 			</div>
