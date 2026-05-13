@@ -1144,8 +1144,8 @@
    emoji/text icon, then navigates to the home link once the
    animation finishes. */
 @keyframes dsb-logo-spin {
-	from { transform: rotateX(0deg); }
-	to   { transform: rotateX(360deg); }
+	from { transform: rotateY(0deg); }
+	to   { transform: rotateY(360deg); }
 }
 
 .dsb-app-logo-img.is-spinning,
