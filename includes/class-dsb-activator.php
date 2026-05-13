@@ -53,15 +53,26 @@ class DSB_Activator {
 			update_option( 'dsb_db_version', '1.4' );
 		}
 
+		if ( version_compare( $current, '1.5', '<' ) ) {
+			self::migrate_create_photo_access_table();
+			update_option( 'dsb_db_version', '1.5' );
+		}
+
 		// Self-heal sweep: re-approve any dating member that is
 		// somehow missing the approval flag. Throttled to once per
-		// hour to keep front-end requests cheap. Runs in addition to
-		// the versioned migration above so the system can recover
-		// even if the approval meta is cleared after the migration
-		// has already finished.
+		// hour to keep front-end requests cheap.
 		if ( false === get_transient( 'dsb_member_approval_sweep' ) ) {
 			self::migrate_restore_member_approval();
 			set_transient( 'dsb_member_approval_sweep', 1, HOUR_IN_SECONDS );
+		}
+
+		// Self-heal sweep: ensure every dsb_*_page option points at
+		// a valid, published page. Catches situations where the
+		// options were accidentally cleared (e.g. import, DB reset,
+		// option cleanup plugin). Throttled to once per hour.
+		if ( false === get_transient( 'dsb_page_options_sweep' ) ) {
+			self::migrate_ensure_plugin_pages();
+			set_transient( 'dsb_page_options_sweep', 1, HOUR_IN_SECONDS );
 		}
 	}
 
@@ -296,6 +307,32 @@ class DSB_Activator {
 	}
 
 	/**
+	 * Migration: create the dsb_photo_access table for private photo
+	 * album access requests. Also runs on activation via
+	 * create_database_tables() but the migration ensures existing
+	 * installs that upgrade without re-activating still get the table.
+	 */
+	private static function migrate_create_photo_access_table() {
+		global $wpdb;
+		$charset_collate = $wpdb->get_charset_collate();
+		$table = $wpdb->prefix . 'dsb_photo_access';
+		$sql = "CREATE TABLE IF NOT EXISTS $table (
+			id bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+			requester_id bigint(20) UNSIGNED NOT NULL,
+			owner_id bigint(20) UNSIGNED NOT NULL,
+			status varchar(20) NOT NULL DEFAULT 'pending',
+			created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at datetime DEFAULT NULL,
+			PRIMARY KEY (id),
+			UNIQUE KEY requester_owner (requester_id, owner_id),
+			KEY owner_id (owner_id),
+			KEY status (status)
+		) $charset_collate;";
+		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+		dbDelta( $sql );
+	}
+
+	/**
 	 * Migration: make Edit Profile, Forgot Password and Likes &
 	 * Favorites children of the My Profile page so the theme's page
 	 * menu collapses them into a submenu.
@@ -425,6 +462,21 @@ class DSB_Activator {
 			KEY created_at (created_at)
 		) $charset_collate;";
 
+		// Photo access requests table (private photo albums)
+		$table_photo_access = $wpdb->prefix . 'dsb_photo_access';
+		$sql_photo_access = "CREATE TABLE IF NOT EXISTS $table_photo_access (
+			id bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+			requester_id bigint(20) UNSIGNED NOT NULL,
+			owner_id bigint(20) UNSIGNED NOT NULL,
+			status varchar(20) NOT NULL DEFAULT 'pending',
+			created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at datetime DEFAULT NULL,
+			PRIMARY KEY (id),
+			UNIQUE KEY requester_owner (requester_id, owner_id),
+			KEY owner_id (owner_id),
+			KEY status (status)
+		) $charset_collate;";
+
 		require_once( ABSPATH . 'wp-admin/includes/upgrade.php' );
 		dbDelta( $sql_messages );
 		dbDelta( $sql_likes );
@@ -432,6 +484,7 @@ class DSB_Activator {
 		dbDelta( $sql_reports );
 		dbDelta( $sql_views );
 		dbDelta( $sql_group_chat );
+		dbDelta( $sql_photo_access );
 
 		// Store database version - only seed on fresh installs so
 		// reactivating the plugin does not roll already-applied

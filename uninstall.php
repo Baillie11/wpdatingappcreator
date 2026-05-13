@@ -19,6 +19,7 @@ $tables = array(
 	$wpdb->prefix . 'dsb_blocks',
 	$wpdb->prefix . 'dsb_reports',
 	$wpdb->prefix . 'dsb_profile_views',
+	$wpdb->prefix . 'dsb_photo_access',
 );
 
 foreach ( $tables as $table ) {
@@ -36,6 +37,7 @@ $options = array(
 	'dsb_allow_custom_gender',
 	'dsb_allow_multiple_interests',
 	'dsb_photo_privacy_mode',
+	'dsb_enable_private_photos',
 	'dsb_age_gate_enabled',
 	'dsb_matching_mode',
 	'dsb_require_mutual_like',

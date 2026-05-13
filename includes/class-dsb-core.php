@@ -64,8 +64,11 @@ class DSB_Core {
 		$this->loader->add_action( 'wp_ajax_dsb_resolve_report', $plugin_admin, 'resolve_report' );
 
 		// Manage dating profile photos from the standard WP user screens.
-		$this->loader->add_action( 'show_user_profile', $plugin_admin, 'render_user_profile_photos' );
-		$this->loader->add_action( 'edit_user_profile', $plugin_admin, 'render_user_profile_photos' );
+		// Priority 0 renders the photo section above the default WP
+		// "Profile Picture" row (which we hide via CSS), keeping a
+		// single, consolidated photo area near the top of the page.
+		$this->loader->add_action( 'show_user_profile', $plugin_admin, 'render_user_profile_photos', 0 );
+		$this->loader->add_action( 'edit_user_profile', $plugin_admin, 'render_user_profile_photos', 0 );
 		$this->loader->add_action( 'personal_options_update', $plugin_admin, 'save_user_profile_photos' );
 		$this->loader->add_action( 'edit_user_profile_update', $plugin_admin, 'save_user_profile_photos' );
 
@@ -92,7 +95,7 @@ class DSB_Core {
 
 		// Run any pending data migrations for existing installs that were
 		// upgraded by simply replacing plugin files (no re-activation).
-		$this->loader->add_action( 'plugins_loaded', 'DSB_Activator', 'run_migrations' );
+		$this->loader->add_action( 'init', 'DSB_Activator', 'run_migrations' );
 
 		// Hide the Login page from front-end menus when the user is
 		// already logged in. Two filters cover both the theme's page menu
@@ -128,6 +131,9 @@ class DSB_Core {
 		$this->loader->add_action( 'wp_ajax_dsb_upload_photo', $plugin_public, 'ajax_upload_photo' );
 		$this->loader->add_action( 'wp_ajax_dsb_delete_photo', $plugin_public, 'ajax_delete_photo' );
 		$this->loader->add_action( 'wp_ajax_dsb_set_main_photo', $plugin_public, 'ajax_set_main_photo' );
+		$this->loader->add_action( 'wp_ajax_dsb_toggle_photo_privacy', $plugin_public, 'ajax_toggle_photo_privacy' );
+		$this->loader->add_action( 'wp_ajax_dsb_request_photo_access', $plugin_public, 'ajax_request_photo_access' );
+		$this->loader->add_action( 'wp_ajax_dsb_respond_photo_access', $plugin_public, 'ajax_respond_photo_access' );
 		
 		// Messaging AJAX
 		$messaging = new DSB_Messaging();

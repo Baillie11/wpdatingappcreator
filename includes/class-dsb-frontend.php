@@ -472,6 +472,20 @@ class DSB_Frontend {
 			box-shadow: 0 8px 32px rgba(31, 38, 135, 0.1) !important;
 			border-radius: 24px !important;
 		}
+
+		.dsb-member-card-info {
+			color: #0f172a !important;
+		}
+
+		.dsb-member-card h3 {
+			color: #0f172a !important;
+		}
+
+		.dsb-member-card-meta,
+		.dsb-member-location,
+		.dsb-member-headline {
+			color: #475569 !important;
+		}
 		
 		.dsb-member-card:hover {
 			box-shadow: 0 16px 48px rgba(31, 38, 135, 0.2) !important;
@@ -636,6 +650,20 @@ class DSB_Frontend {
 			box-shadow: none !important;
 			border: 1px solid #e5e5e5 !important;
 			overflow: hidden;
+		}
+
+		.dsb-member-card-info {
+			color: #111827 !important;
+		}
+
+		.dsb-member-card h3 {
+			color: #111827 !important;
+		}
+
+		.dsb-member-card-meta,
+		.dsb-member-location,
+		.dsb-member-headline {
+			color: #6b7280 !important;
 		}
 		
 		.dsb-member-card:hover {
@@ -1555,17 +1583,12 @@ class DSB_Frontend {
 			</div>
 			<div class="dsb-fullscreen-content">
 				<div class="dsb-auth-container">
-					<div class="dsb-auth-branding">
+					<div class="dsb-auth-branding dsb-auth-branding-logo-only">
 						<?php echo $this->render_auth_logo( '💕' ); ?>
-						<h1><?php echo esc_html( $this->get_site_name() ); ?></h1>
-						<p><?php _e( 'Find your perfect match today', 'dating-site-builder' ); ?></p>
 					</div>
 					<form id="dsb-login-form" class="dsb-auth-form">
 						<?php wp_nonce_field( 'dsb_login', 'dsb_login_nonce' ); ?>
 						
-						<h2><?php _e( 'Welcome Back', 'dating-site-builder' ); ?></h2>
-						<p class="dsb-auth-subtitle"><?php _e( 'Login to continue your journey', 'dating-site-builder' ); ?></p>
-
 						<div class="dsb-form-group">
 							<label for="login_username"><?php _e( 'Username or Email', 'dating-site-builder' ); ?></label>
 							<input type="text" id="login_username" name="username" placeholder="<?php _e( 'Enter your username or email', 'dating-site-builder' ); ?>" required />
@@ -1646,13 +1669,82 @@ class DSB_Frontend {
 					</div>
 				</div>
 
+				<?php
+				// Photo access requests section (visible when private photos are enabled).
+				$private_photos_on = (bool) get_option( 'dsb_enable_private_photos', false );
+				if ( $private_photos_on ) :
+					global $wpdb;
+					$access_table   = $wpdb->prefix . 'dsb_photo_access';
+					$pending_reqs   = $wpdb->get_results( $wpdb->prepare(
+						"SELECT id, requester_id, created_at FROM $access_table WHERE owner_id = %d AND status = 'pending' ORDER BY created_at DESC",
+						$user_id
+					) );
+					if ( $pending_reqs ) :
+				?>
+				<div class="dsb-photo-access-requests">
+					<h3><?php _e( 'Private Photo Requests', 'dating-site-builder' ); ?></h3>
+					<p class="dsb-access-requests-desc"><?php _e( 'These members want to see your private photos.', 'dating-site-builder' ); ?></p>
+					<div class="dsb-access-request-list">
+						<?php foreach ( $pending_reqs as $req ) :
+							$req_user = get_userdata( $req->requester_id );
+							if ( ! $req_user ) continue;
+						?>
+							<div class="dsb-access-request-item" data-request-id="<?php echo esc_attr( $req->id ); ?>">
+								<div class="dsb-access-request-user">
+									<?php echo get_avatar( $req->requester_id, 40 ); ?>
+									<span><?php echo esc_html( $req_user->display_name ); ?></span>
+								</div>
+								<div class="dsb-access-request-actions">
+									<button class="dsb-btn dsb-btn-small dsb-btn-primary dsb-approve-access" data-request-id="<?php echo esc_attr( $req->id ); ?>"><?php _e( 'Approve', 'dating-site-builder' ); ?></button>
+									<button class="dsb-btn dsb-btn-small dsb-btn-secondary dsb-deny-access" data-request-id="<?php echo esc_attr( $req->id ); ?>"><?php _e( 'Deny', 'dating-site-builder' ); ?></button>
+								</div>
+							</div>
+						<?php endforeach; ?>
+					</div>
+				</div>
+				<?php
+					endif;
+				endif;
+				?>
+
 				<!-- Profile Fields -->
 				<div class="dsb-profile-fields">
+					<?php $printed_partner_headings = array( '1' => false, '2' => false ); ?>
 					<?php foreach ( $fields as $field_key => $field ) : 
 						$value = get_user_meta( $user_id, 'dsb_' . $field_key, true );
-						$couple_attr = ! empty( $field['requires_couple'] ) ? ' data-requires-couple="1"' : '';
+						if ( ( '' === $value || null === $value ) && 0 === strpos( $field_key, 'partner_2_' ) ) {
+							$legacy_field_key = 'partner_' . substr( $field_key, 10 );
+							$legacy_value     = get_user_meta( $user_id, 'dsb_' . $legacy_field_key, true );
+							if ( '' !== $legacy_value && null !== $legacy_value ) {
+								$value = $legacy_value;
+							}
+						}
+
+						$group_classes = array( 'dsb-form-group' );
+						$group_attrs   = array();
+						$group_attrs[] = 'data-field-key="' . esc_attr( $field_key ) . '"';
+						if ( ! empty( $field['requires_couple'] ) ) {
+							$group_classes[] = 'dsb-couple-only-field';
+							$group_attrs[]   = 'data-requires-couple="1"';
+						}
+						if ( ! empty( $field['couple_column'] ) ) {
+							$group_classes[] = 'dsb-partner-field';
+							$group_attrs[]   = 'data-partner-column="' . esc_attr( (string) $field['couple_column'] ) . '"';
+						}
+
+						if ( ! empty( $field['requires_couple'] ) && ! empty( $field['couple_column'] ) ) {
+							$column = (string) $field['couple_column'];
+							if ( isset( $printed_partner_headings[ $column ] ) && ! $printed_partner_headings[ $column ] ) {
+								$printed_partner_headings[ $column ] = true;
+								?>
+								<div class="dsb-partner-column-heading" data-requires-couple="1" data-partner-column="<?php echo esc_attr( $column ); ?>">
+									<?php echo esc_html( '1' === $column ? __( 'Partner 1', 'dating-site-builder' ) : __( 'Partner 2', 'dating-site-builder' ) ); ?>
+								</div>
+								<?php
+							}
+						}
 						?>
-						<div class="dsb-form-group"<?php echo $couple_attr; ?>>
+						<div class="<?php echo esc_attr( implode( ' ', $group_classes ) ); ?>" <?php echo implode( ' ', $group_attrs ); ?>>
 							<label for="field_<?php echo esc_attr( $field_key ); ?>">
 								<?php echo esc_html( $field['label'] ); ?>
 								<?php if ( ! empty( $field['required'] ) ) : ?>
@@ -1754,10 +1846,13 @@ class DSB_Frontend {
 			// Show / hide partner-only fields based on the "I am / We are"
 			// select. Partner fields are flagged with data-requires-couple="1".
 			function dsbToggleCoupleFields(){
-				var $kind  = $('#field_profile_kind');
-				var value  = $kind.length ? ( $kind.val() || '' ) : '';
-				var couple = value.indexOf('couple_') === 0;
-				$('.dsb-form-group[data-requires-couple]').toggle( couple );
+				var $kind        = $('#field_profile_kind');
+				var $editWrapper = $('.dsb-profile-edit-wrapper');
+				var value        = $kind.length ? ( $kind.val() || '' ) : '';
+				var couple       = value.indexOf('couple_') === 0;
+
+				$editWrapper.toggleClass('dsb-couple-layout', couple);
+				$('.dsb-profile-fields [data-requires-couple="1"]').toggle( couple );
 			}
 			dsbToggleCoupleFields();
 			$(document).on('change', '#field_profile_kind', dsbToggleCoupleFields);
@@ -1813,7 +1908,6 @@ class DSB_Frontend {
 
 		$fields            = DSB_Profile_Fields::get_all_fields();
 		$age               = $this->calculate_age( get_user_meta( $user_id, 'dsb_date_of_birth', true ) );
-		$gender            = get_user_meta( $user_id, 'dsb_gender', true );
 		$city              = get_user_meta( $user_id, 'dsb_city', true );
 		$state             = get_user_meta( $user_id, 'dsb_state', true );
 		$country           = get_user_meta( $user_id, 'dsb_country', true );
@@ -1827,15 +1921,35 @@ class DSB_Frontend {
 		$is_couple   = $profile_kind && strpos( $profile_kind, 'couple_' ) === 0;
 		$kind_prefix = $is_couple ? __( 'We are', 'dating-site-builder' ) : __( 'I am', 'dating-site-builder' );
 
-		$partner_name        = get_user_meta( $user_id, 'dsb_partner_display_name', true );
-		$partner_dob         = get_user_meta( $user_id, 'dsb_partner_date_of_birth', true );
-		$partner_age         = $partner_dob ? $this->calculate_age( $partner_dob ) : '';
-		$partner_headline    = get_user_meta( $user_id, 'dsb_partner_headline', true );
-		$partner_about       = get_user_meta( $user_id, 'dsb_partner_about', true );
-		$partner_looking_for = get_user_meta( $user_id, 'dsb_partner_looking_for', true );
-		$has_partner_info    = $is_couple && (
-			$partner_name || $partner_age || $partner_headline || $partner_about || $partner_looking_for
+		$get_partner_meta = static function ( $meta_key, $legacy_meta_key = '' ) use ( $user_id ) {
+			$value = get_user_meta( $user_id, 'dsb_' . $meta_key, true );
+			if ( ( '' === $value || null === $value ) && $legacy_meta_key ) {
+				$value = get_user_meta( $user_id, 'dsb_' . $legacy_meta_key, true );
+			}
+			return $value;
+		};
+
+		$partner_1 = array(
+			'name'        => $get_partner_meta( 'partner_1_display_name' ),
+			'dob'         => $get_partner_meta( 'partner_1_date_of_birth' ),
+			'headline'    => $get_partner_meta( 'partner_1_headline' ),
+			'about'       => $get_partner_meta( 'partner_1_about' ),
+			'looking_for' => $get_partner_meta( 'partner_1_looking_for' ),
 		);
+		$partner_1['age'] = $partner_1['dob'] ? $this->calculate_age( $partner_1['dob'] ) : '';
+
+		$partner_2 = array(
+			'name'        => $get_partner_meta( 'partner_2_display_name', 'partner_display_name' ),
+			'dob'         => $get_partner_meta( 'partner_2_date_of_birth', 'partner_date_of_birth' ),
+			'headline'    => $get_partner_meta( 'partner_2_headline', 'partner_headline' ),
+			'about'       => $get_partner_meta( 'partner_2_about', 'partner_about' ),
+			'looking_for' => $get_partner_meta( 'partner_2_looking_for', 'partner_looking_for' ),
+		);
+		$partner_2['age'] = $partner_2['dob'] ? $this->calculate_age( $partner_2['dob'] ) : '';
+
+		$has_partner_1   = ! empty( array_filter( array( $partner_1['name'], $partner_1['age'], $partner_1['headline'], $partner_1['about'], $partner_1['looking_for'] ), 'strlen' ) );
+		$has_partner_2   = ! empty( array_filter( array( $partner_2['name'], $partner_2['age'], $partner_2['headline'], $partner_2['about'], $partner_2['looking_for'] ), 'strlen' ) );
+		$has_partner_info = $is_couple && ( $has_partner_1 || $has_partner_2 );
 
 		// Build the location string from whatever pieces the member has
 		// supplied (city, state/region, country) so visitors can see
@@ -1859,11 +1973,16 @@ class DSB_Frontend {
 			'country',
 			// Surfaced explicitly above / in the partner section below.
 			'profile_kind',
-			'partner_display_name',
-			'partner_date_of_birth',
-			'partner_headline',
-			'partner_about',
-			'partner_looking_for',
+			'partner_1_display_name',
+			'partner_1_date_of_birth',
+			'partner_1_headline',
+			'partner_1_about',
+			'partner_1_looking_for',
+			'partner_2_display_name',
+			'partner_2_date_of_birth',
+			'partner_2_headline',
+			'partner_2_about',
+			'partner_2_looking_for',
 		);
 
 		// Pre-compute the remaining detail rows so we can decide whether
@@ -1912,7 +2031,7 @@ class DSB_Frontend {
 		<div class="dsb-profile-view-wrapper dsb-profile-view-narrow">
 			<div class="dsb-profile-card dsb-profile-card-stacked">
 				<div class="dsb-profile-photos">
-					<?php echo $this->render_user_photos( $user_id, false ); ?>
+					<?php echo $this->render_user_photos( $user_id, false, $current_user_id ); ?>
 				</div>
 
 				<div class="dsb-profile-info">
@@ -1948,33 +2067,65 @@ class DSB_Frontend {
 					<?php endif; ?>
 
 					<?php if ( $has_partner_info ) : ?>
-						<section class="dsb-profile-section dsb-profile-partner">
-							<h3>
-								<?php
-								if ( $partner_name ) {
-									printf(
-										/* translators: %s: partner display name and (optional) age. */
-										esc_html__( 'About %s', 'dating-site-builder' ),
-										esc_html( $partner_name . ( $partner_age ? ', ' . $partner_age : '' ) )
-									);
-								} else {
-									esc_html_e( 'About Partner', 'dating-site-builder' );
-								}
-								?>
-							</h3>
-							<?php if ( $partner_headline ) : ?>
-								<p class="dsb-profile-headline">“<?php echo esc_html( $partner_headline ); ?>”</p>
-							<?php endif; ?>
-							<?php if ( $partner_about ) : ?>
-								<p class="dsb-profile-bio"><?php echo nl2br( esc_html( $partner_about ) ); ?></p>
-							<?php endif; ?>
-							<?php if ( $partner_looking_for ) : ?>
-								<p class="dsb-profile-bio">
-									<strong><?php esc_html_e( 'What partner is looking for:', 'dating-site-builder' ); ?></strong><br>
-									<?php echo nl2br( esc_html( $partner_looking_for ) ); ?>
-								</p>
-							<?php endif; ?>
-						</section>
+						<?php if ( $has_partner_1 ) : ?>
+							<section class="dsb-profile-section dsb-profile-partner">
+								<h3>
+									<?php
+									if ( $partner_1['name'] ) {
+										printf(
+											/* translators: %s: partner display name and (optional) age. */
+											esc_html__( 'Partner 1: %s', 'dating-site-builder' ),
+											esc_html( $partner_1['name'] . ( $partner_1['age'] ? ', ' . $partner_1['age'] : '' ) )
+										);
+									} else {
+										esc_html_e( 'Partner 1', 'dating-site-builder' );
+									}
+									?>
+								</h3>
+								<?php if ( $partner_1['headline'] ) : ?>
+									<p class="dsb-profile-headline">“<?php echo esc_html( $partner_1['headline'] ); ?>”</p>
+								<?php endif; ?>
+								<?php if ( $partner_1['about'] ) : ?>
+									<p class="dsb-profile-bio"><?php echo nl2br( esc_html( $partner_1['about'] ) ); ?></p>
+								<?php endif; ?>
+								<?php if ( $partner_1['looking_for'] ) : ?>
+									<p class="dsb-profile-bio">
+										<strong><?php esc_html_e( 'What Partner 1 is looking for:', 'dating-site-builder' ); ?></strong><br>
+										<?php echo nl2br( esc_html( $partner_1['looking_for'] ) ); ?>
+									</p>
+								<?php endif; ?>
+							</section>
+						<?php endif; ?>
+
+						<?php if ( $has_partner_2 ) : ?>
+							<section class="dsb-profile-section dsb-profile-partner">
+								<h3>
+									<?php
+									if ( $partner_2['name'] ) {
+										printf(
+											/* translators: %s: partner display name and (optional) age. */
+											esc_html__( 'Partner 2: %s', 'dating-site-builder' ),
+											esc_html( $partner_2['name'] . ( $partner_2['age'] ? ', ' . $partner_2['age'] : '' ) )
+										);
+									} else {
+										esc_html_e( 'Partner 2', 'dating-site-builder' );
+									}
+									?>
+								</h3>
+								<?php if ( $partner_2['headline'] ) : ?>
+									<p class="dsb-profile-headline">“<?php echo esc_html( $partner_2['headline'] ); ?>”</p>
+								<?php endif; ?>
+								<?php if ( $partner_2['about'] ) : ?>
+									<p class="dsb-profile-bio"><?php echo nl2br( esc_html( $partner_2['about'] ) ); ?></p>
+								<?php endif; ?>
+								<?php if ( $partner_2['looking_for'] ) : ?>
+									<p class="dsb-profile-bio">
+										<strong><?php esc_html_e( 'What Partner 2 is looking for:', 'dating-site-builder' ); ?></strong><br>
+										<?php echo nl2br( esc_html( $partner_2['looking_for'] ) ); ?>
+									</p>
+								<?php endif; ?>
+							</section>
+						<?php endif; ?>
 					<?php endif; ?>
 
 					<?php if ( ! empty( $detail_rows ) ) : ?>
@@ -2383,21 +2534,85 @@ class DSB_Frontend {
 	}
 
 	/**
-	 * Render user photos.
+	 * Normalize the dsb_photos user meta value.
+	 *
+	 * Supports the legacy flat-URL format (`['url1', 'url2']`) and
+	 * the new object format (`[{url, privacy}, ...]`). Always returns
+	 * an array of associative arrays with 'url' and 'privacy' keys.
+	 *
+	 * @param mixed $raw Raw value from get_user_meta().
+	 * @return array Normalized photo list.
 	 */
-	private function render_user_photos( $user_id, $editable = false ) {
-		$photos = get_user_meta( $user_id, 'dsb_photos', true );
-		if ( empty( $photos ) || ! is_array( $photos ) ) {
-			$photos = array();
+	public static function normalize_photos( $raw ) {
+		if ( empty( $raw ) || ! is_array( $raw ) ) {
+			return array();
+		}
+		$normalized = array();
+		foreach ( $raw as $entry ) {
+			if ( is_array( $entry ) && isset( $entry['url'] ) ) {
+				$normalized[] = array(
+					'url'     => $entry['url'],
+					'privacy' => isset( $entry['privacy'] ) ? $entry['privacy'] : 'public',
+				);
+			} elseif ( is_string( $entry ) && '' !== $entry ) {
+				$normalized[] = array(
+					'url'     => $entry,
+					'privacy' => 'public',
+				);
+			}
+		}
+		return $normalized;
+	}
+
+	/**
+	 * Render user photos.
+	 *
+	 * @param int  $user_id    The user whose photos to render.
+	 * @param bool $editable   Whether to show edit controls.
+	 * @param int  $viewer_id  The user viewing the photos (0 = owner / edit mode).
+	 */
+	private function render_user_photos( $user_id, $editable = false, $viewer_id = 0 ) {
+		$photos = self::normalize_photos( get_user_meta( $user_id, 'dsb_photos', true ) );
+		$private_enabled = (bool) get_option( 'dsb_enable_private_photos', false );
+
+		// Determine viewer's access status for private photos.
+		$access_status = '';
+		if ( $private_enabled && $viewer_id && $viewer_id !== $user_id ) {
+			global $wpdb;
+			$table = $wpdb->prefix . 'dsb_photo_access';
+			$access_status = (string) $wpdb->get_var( $wpdb->prepare(
+				"SELECT status FROM $table WHERE requester_id = %d AND owner_id = %d",
+				$viewer_id,
+				$user_id
+			) );
 		}
 
 		ob_start();
-		foreach ( $photos as $index => $photo_url ) :
+		foreach ( $photos as $index => $photo ) :
+			$is_private  = ( 'private' === $photo['privacy'] );
+			$show_locked = ( $is_private && $private_enabled && $viewer_id && $viewer_id !== $user_id && 'approved' !== $access_status );
 		?>
-			<div class="dsb-photo-item" data-photo-index="<?php echo esc_attr( $index ); ?>">
-				<img src="<?php echo esc_url( $photo_url ); ?>" alt="<?php _e( 'User photo', 'dating-site-builder' ); ?>" />
+			<div class="dsb-photo-item<?php echo $show_locked ? ' dsb-photo-private-locked' : ''; ?>" data-photo-index="<?php echo esc_attr( $index ); ?>">
+				<img src="<?php echo esc_url( $photo['url'] ); ?>" alt="<?php _e( 'User photo', 'dating-site-builder' ); ?>"<?php echo $show_locked ? ' class="dsb-photo-blurred"' : ''; ?> />
+				<?php if ( $show_locked ) : ?>
+					<div class="dsb-photo-lock-overlay">
+						<span class="dsb-lock-icon">&#128274;</span>
+						<?php if ( 'pending' === $access_status ) : ?>
+							<span class="dsb-photo-access-badge dsb-access-pending"><?php _e( 'Access Requested', 'dating-site-builder' ); ?></span>
+						<?php else : ?>
+							<button class="dsb-btn dsb-btn-small dsb-request-photo-access" data-owner-id="<?php echo esc_attr( $user_id ); ?>">
+								<?php _e( 'Request Access', 'dating-site-builder' ); ?>
+							</button>
+						<?php endif; ?>
+					</div>
+				<?php endif; ?>
 				<?php if ( $editable ) : ?>
 					<div class="dsb-photo-actions">
+						<?php if ( $private_enabled ) : ?>
+							<button class="dsb-toggle-photo-privacy <?php echo $is_private ? 'is-private' : ''; ?>" data-index="<?php echo esc_attr( $index ); ?>" title="<?php echo $is_private ? esc_attr__( 'Private - click to make public', 'dating-site-builder' ) : esc_attr__( 'Public - click to make private', 'dating-site-builder' ); ?>">
+								<?php echo $is_private ? '&#128274; ' . esc_html__( 'Private', 'dating-site-builder' ) : '&#127760; ' . esc_html__( 'Public', 'dating-site-builder' ); ?>
+							</button>
+						<?php endif; ?>
 						<?php if ( $index !== 0 ) : ?>
 							<button class="dsb-set-main-photo" data-index="<?php echo esc_attr( $index ); ?>"><?php _e( 'Set as main', 'dating-site-builder' ); ?></button>
 						<?php endif; ?>
@@ -2414,9 +2629,9 @@ class DSB_Frontend {
 	 * Get main photo URL.
 	 */
 	private function get_main_photo( $user_id ) {
-		$photos = get_user_meta( $user_id, 'dsb_photos', true );
-		if ( ! empty( $photos ) && is_array( $photos ) ) {
-			return $photos[0];
+		$photos = self::normalize_photos( get_user_meta( $user_id, 'dsb_photos', true ) );
+		if ( ! empty( $photos ) ) {
+			return $photos[0]['url'];
 		}
 		return get_avatar_url( $user_id, array( 'size' => 400 ) );
 	}
@@ -2705,13 +2920,11 @@ class DSB_Frontend {
 		}
 
 		$user_id = get_current_user_id();
-		$photos = get_user_meta( $user_id, 'dsb_photos', true );
-		if ( ! is_array( $photos ) ) {
-			$photos = array();
-		}
+		$photos  = self::normalize_photos( get_user_meta( $user_id, 'dsb_photos', true ) );
+		$max     = (int) get_option( 'dsb_max_photos', 10 );
 
-		if ( count( $photos ) >= 10 ) {
-			wp_send_json_error( array( 'message' => __( 'Maximum 10 photos allowed.', 'dating-site-builder' ) ) );
+		if ( count( $photos ) >= $max ) {
+			wp_send_json_error( array( 'message' => sprintf( __( 'Maximum %d photos allowed.', 'dating-site-builder' ), $max ) ) );
 		}
 
 		require_once ABSPATH . 'wp-admin/includes/file.php';
@@ -2725,7 +2938,7 @@ class DSB_Frontend {
 		}
 
 		$photo_url = wp_get_attachment_url( $attachment_id );
-		$photos[] = $photo_url;
+		$photos[] = array( 'url' => $photo_url, 'privacy' => 'public' );
 
 		update_user_meta( $user_id, 'dsb_photos', $photos );
 
@@ -2746,10 +2959,10 @@ class DSB_Frontend {
 		}
 
 		$user_id = get_current_user_id();
-		$index = intval( $_POST['index'] );
+		$index   = intval( $_POST['index'] );
+		$photos  = self::normalize_photos( get_user_meta( $user_id, 'dsb_photos', true ) );
 
-		$photos = get_user_meta( $user_id, 'dsb_photos', true );
-		if ( is_array( $photos ) && isset( $photos[ $index ] ) ) {
+		if ( isset( $photos[ $index ] ) ) {
 			unset( $photos[ $index ] );
 			$photos = array_values( $photos );
 			update_user_meta( $user_id, 'dsb_photos', $photos );
@@ -2769,18 +2982,127 @@ class DSB_Frontend {
 		}
 
 		$user_id = get_current_user_id();
-		$index = intval( $_POST['index'] );
+		$index   = intval( $_POST['index'] );
+		$photos  = self::normalize_photos( get_user_meta( $user_id, 'dsb_photos', true ) );
 
-		$photos = get_user_meta( $user_id, 'dsb_photos', true );
-		if ( is_array( $photos ) && isset( $photos[ $index ] ) ) {
-			$main_photo = $photos[ $index ];
+		if ( isset( $photos[ $index ] ) ) {
+			$main = $photos[ $index ];
 			unset( $photos[ $index ] );
-			array_unshift( $photos, $main_photo );
+			array_unshift( $photos, $main );
 			$photos = array_values( $photos );
 			update_user_meta( $user_id, 'dsb_photos', $photos );
 		}
 
 		wp_send_json_success();
+	}
+
+	/**
+	 * AJAX: Toggle a photo's privacy between public and private.
+	 */
+	public function ajax_toggle_photo_privacy() {
+		check_ajax_referer( 'dsb_public_nonce', 'nonce' );
+
+		if ( ! is_user_logged_in() ) {
+			wp_send_json_error();
+		}
+
+		$user_id = get_current_user_id();
+		$index   = intval( $_POST['index'] );
+		$photos  = self::normalize_photos( get_user_meta( $user_id, 'dsb_photos', true ) );
+
+		if ( isset( $photos[ $index ] ) ) {
+			$photos[ $index ]['privacy'] = ( 'private' === $photos[ $index ]['privacy'] ) ? 'public' : 'private';
+			update_user_meta( $user_id, 'dsb_photos', $photos );
+			wp_send_json_success( array( 'privacy' => $photos[ $index ]['privacy'] ) );
+		}
+
+		wp_send_json_error();
+	}
+
+	/**
+	 * AJAX: Request access to another user's private photos.
+	 */
+	public function ajax_request_photo_access() {
+		check_ajax_referer( 'dsb_public_nonce', 'nonce' );
+
+		if ( ! is_user_logged_in() ) {
+			wp_send_json_error();
+		}
+
+		global $wpdb;
+		$table    = $wpdb->prefix . 'dsb_photo_access';
+		$user_id  = get_current_user_id();
+		$owner_id = intval( $_POST['owner_id'] );
+
+		if ( $owner_id === $user_id || ! $owner_id ) {
+			wp_send_json_error();
+		}
+
+		// Upsert: insert or update to pending if previously denied.
+		$existing = $wpdb->get_var( $wpdb->prepare(
+			"SELECT status FROM $table WHERE requester_id = %d AND owner_id = %d",
+			$user_id,
+			$owner_id
+		) );
+
+		if ( $existing ) {
+			if ( 'pending' === $existing || 'approved' === $existing ) {
+				wp_send_json_success( array( 'status' => $existing ) );
+			}
+			// Re-request after denial.
+			$wpdb->update(
+				$table,
+				array( 'status' => 'pending', 'updated_at' => current_time( 'mysql' ) ),
+				array( 'requester_id' => $user_id, 'owner_id' => $owner_id ),
+				array( '%s', '%s' ),
+				array( '%d', '%d' )
+			);
+		} else {
+			$wpdb->insert(
+				$table,
+				array(
+					'requester_id' => $user_id,
+					'owner_id'     => $owner_id,
+					'status'       => 'pending',
+					'created_at'   => current_time( 'mysql' ),
+				),
+				array( '%d', '%d', '%s', '%s' )
+			);
+		}
+
+		wp_send_json_success( array( 'status' => 'pending' ) );
+	}
+
+	/**
+	 * AJAX: Approve or deny a private-photo access request.
+	 */
+	public function ajax_respond_photo_access() {
+		check_ajax_referer( 'dsb_public_nonce', 'nonce' );
+
+		if ( ! is_user_logged_in() ) {
+			wp_send_json_error();
+		}
+
+		global $wpdb;
+		$table        = $wpdb->prefix . 'dsb_photo_access';
+		$owner_id     = get_current_user_id();
+		$request_id   = intval( $_POST['request_id'] );
+		$decision     = sanitize_text_field( $_POST['decision'] );
+
+		if ( ! in_array( $decision, array( 'approved', 'denied' ), true ) ) {
+			wp_send_json_error();
+		}
+
+		// Only let the owner respond to requests addressed to them.
+		$wpdb->update(
+			$table,
+			array( 'status' => $decision, 'updated_at' => current_time( 'mysql' ) ),
+			array( 'id' => $request_id, 'owner_id' => $owner_id, 'status' => 'pending' ),
+			array( '%s', '%s' ),
+			array( '%d', '%d', '%s' )
+		);
+
+		wp_send_json_success( array( 'status' => $decision ) );
 	}
 
 	/**
@@ -2797,8 +3119,8 @@ class DSB_Frontend {
 		update_user_meta( get_current_user_id(), 'dsb_last_activity', current_time( 'mysql' ) );
 
 		$user = wp_get_current_user();
-		$photos = get_user_meta( get_current_user_id(), 'dsb_photos', true );
-		$avatar = ! empty( $photos ) && is_array( $photos ) ? $photos[0] : get_avatar_url( get_current_user_id(), array( 'size' => 40 ) );
+		$norm_photos = self::normalize_photos( get_user_meta( get_current_user_id(), 'dsb_photos', true ) );
+		$avatar = ! empty( $norm_photos ) ? $norm_photos[0]['url'] : get_avatar_url( get_current_user_id(), array( 'size' => 40 ) );
 
 		ob_start();
 		echo $this->render_app_header( 'chat' );

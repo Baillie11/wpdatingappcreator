@@ -98,19 +98,6 @@ class DSB_Profile_Fields {
 	 * Basic profile fields.
 	 */
 	private static function get_basic_fields() {
-		$allow_custom_gender = get_option( 'dsb_allow_custom_gender', true );
-
-		$gender_options = array(
-			'male'   => __( 'Male', 'dating-site-builder' ),
-			'female' => __( 'Female', 'dating-site-builder' ),
-		);
-
-		if ( $allow_custom_gender ) {
-			$gender_options['non-binary'] = __( 'Non-binary', 'dating-site-builder' );
-			$gender_options['other'] = __( 'Other', 'dating-site-builder' );
-			$gender_options['prefer-not-say'] = __( 'Prefer not to say', 'dating-site-builder' );
-		}
-
 		$fields = array(
 			'profile_kind' => array(
 				'label'       => __( 'I am / We are', 'dating-site-builder' ),
@@ -127,13 +114,6 @@ class DSB_Profile_Fields {
 				),
 				'privacy'     => false,
 				'description' => __( 'Are you posting as an individual, couple, or group? Pick a Couple option to unlock the partner profile fields below.', 'dating-site-builder' ),
-			),
-			'gender' => array(
-				'label'       => __( 'Gender', 'dating-site-builder' ),
-				'type'        => 'select',
-				'required'    => true,
-				'options'     => $gender_options,
-				'privacy'     => true,
 			),
 			'date_of_birth' => array(
 				'label'       => __( 'Date of Birth', 'dating-site-builder' ),
@@ -272,54 +252,108 @@ class DSB_Profile_Fields {
 	 * Partner / dual-profile fields.
 	 *
 	 * These are stored alongside the primary member's meta with a
-	 * `partner_` prefix and only rendered when the member's
+	 * `partner_1_` / `partner_2_` prefix and only rendered when the member's
 	 * `profile_kind` value starts with `couple_` (handled in the
-	 * profile-edit and profile-view templates).
+	 * profile-edit and profile-view templates). Legacy `partner_*`
+	 * meta remains supported as a Partner 2 fallback.
 	 */
 	private static function get_partner_fields() {
 		return array(
-			'partner_display_name' => array(
-				'label'           => __( 'Partner Name', 'dating-site-builder' ),
+			'partner_1_display_name' => array(
+				'label'           => __( 'Partner 1 Name', 'dating-site-builder' ),
 				'type'            => 'text',
 				'required'        => false,
 				'maxlength'       => 50,
 				'privacy'         => false,
 				'requires_couple' => true,
-				'description'     => __( 'How your partner is shown on your couple profile.', 'dating-site-builder' ),
+				'couple_column'   => 1,
+				'description'     => __( 'How Partner 1 is shown on your couple profile.', 'dating-site-builder' ),
 			),
-			'partner_date_of_birth' => array(
-				'label'           => __( 'Partner Date of Birth', 'dating-site-builder' ),
+			'partner_1_date_of_birth' => array(
+				'label'           => __( 'Partner 1 Date of Birth', 'dating-site-builder' ),
 				'type'            => 'date',
 				'required'        => false,
 				'privacy'         => true,
 				'requires_couple' => true,
-				'description'     => __( 'Used only to display partner\'s age. The exact date stays private.', 'dating-site-builder' ),
+				'couple_column'   => 1,
+				'description'     => __( 'Used only to display Partner 1\'s age. The exact date stays private.', 'dating-site-builder' ),
 			),
-			'partner_headline' => array(
-				'label'           => __( 'Partner Headline', 'dating-site-builder' ),
+			'partner_1_headline' => array(
+				'label'           => __( 'Partner 1 Headline', 'dating-site-builder' ),
 				'type'            => 'text',
 				'required'        => false,
 				'maxlength'       => 100,
 				'privacy'         => false,
 				'requires_couple' => true,
-				'description'     => __( 'A short tagline for your partner (max 100 characters).', 'dating-site-builder' ),
+				'couple_column'   => 1,
+				'description'     => __( 'A short tagline for Partner 1 (max 100 characters).', 'dating-site-builder' ),
 			),
-			'partner_about' => array(
-				'label'           => __( 'About Partner', 'dating-site-builder' ),
+			'partner_1_about' => array(
+				'label'           => __( 'About Partner 1', 'dating-site-builder' ),
 				'type'            => 'textarea',
 				'required'        => false,
 				'maxlength'       => 500,
 				'privacy'         => false,
 				'requires_couple' => true,
-				'description'     => __( 'Tell others about your partner (max 500 characters).', 'dating-site-builder' ),
+				'couple_column'   => 1,
+				'description'     => __( 'Tell others about Partner 1 (max 500 characters).', 'dating-site-builder' ),
 			),
-			'partner_looking_for' => array(
-				'label'           => __( 'What Partner Is Looking For', 'dating-site-builder' ),
+			'partner_1_looking_for' => array(
+				'label'           => __( 'What Partner 1 Is Looking For', 'dating-site-builder' ),
 				'type'            => 'textarea',
 				'required'        => false,
 				'maxlength'       => 500,
 				'privacy'         => false,
 				'requires_couple' => true,
+				'couple_column'   => 1,
+			),
+			'partner_2_display_name' => array(
+				'label'           => __( 'Partner 2 Name', 'dating-site-builder' ),
+				'type'            => 'text',
+				'required'        => false,
+				'maxlength'       => 50,
+				'privacy'         => false,
+				'requires_couple' => true,
+				'couple_column'   => 2,
+				'description'     => __( 'How Partner 2 is shown on your couple profile.', 'dating-site-builder' ),
+			),
+			'partner_2_date_of_birth' => array(
+				'label'           => __( 'Partner 2 Date of Birth', 'dating-site-builder' ),
+				'type'            => 'date',
+				'required'        => false,
+				'privacy'         => true,
+				'requires_couple' => true,
+				'couple_column'   => 2,
+				'description'     => __( 'Used only to display Partner 2\'s age. The exact date stays private.', 'dating-site-builder' ),
+			),
+			'partner_2_headline' => array(
+				'label'           => __( 'Partner 2 Headline', 'dating-site-builder' ),
+				'type'            => 'text',
+				'required'        => false,
+				'maxlength'       => 100,
+				'privacy'         => false,
+				'requires_couple' => true,
+				'couple_column'   => 2,
+				'description'     => __( 'A short tagline for Partner 2 (max 100 characters).', 'dating-site-builder' ),
+			),
+			'partner_2_about' => array(
+				'label'           => __( 'About Partner 2', 'dating-site-builder' ),
+				'type'            => 'textarea',
+				'required'        => false,
+				'maxlength'       => 500,
+				'privacy'         => false,
+				'requires_couple' => true,
+				'couple_column'   => 2,
+				'description'     => __( 'Tell others about Partner 2 (max 500 characters).', 'dating-site-builder' ),
+			),
+			'partner_2_looking_for' => array(
+				'label'           => __( 'What Partner 2 Is Looking For', 'dating-site-builder' ),
+				'type'            => 'textarea',
+				'required'        => false,
+				'maxlength'       => 500,
+				'privacy'         => false,
+				'requires_couple' => true,
+				'couple_column'   => 2,
 			),
 		);
 	}

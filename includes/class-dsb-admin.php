@@ -1599,8 +1599,8 @@ class DSB_Admin {
 								$is_approved = get_user_meta( $member->ID, 'dsb_profile_approved', true );
 								$is_suspended = get_user_meta( $member->ID, 'dsb_suspended', true );
 								$is_banned = get_user_meta( $member->ID, 'dsb_banned', true );
-								$photos = get_user_meta( $member->ID, 'dsb_photos', true );
-								$main_photo = ! empty( $photos ) && is_array( $photos ) ? $photos[0] : '';
+								$norm_photos = DSB_Frontend::normalize_photos( get_user_meta( $member->ID, 'dsb_photos', true ) );
+								$main_photo = ! empty( $norm_photos ) ? $norm_photos[0]['url'] : '';
 							?>
 								<tr>
 									<th scope="row" class="check-column">
@@ -2542,18 +2542,16 @@ class DSB_Admin {
 		// Make sure wp.media is available for the "Add Photo(s)" picker.
 		wp_enqueue_media();
 
-		$photos = get_user_meta( $user->ID, 'dsb_photos', true );
-		if ( ! is_array( $photos ) ) {
-			$photos = array();
-		}
+		$photos = DSB_Frontend::normalize_photos( get_user_meta( $user->ID, 'dsb_photos', true ) );
+		$private_enabled = (bool) get_option( 'dsb_enable_private_photos', false );
 		$max_photos = (int) get_option( 'dsb_max_photos', 10 );
 		if ( $max_photos < 1 ) {
 			$max_photos = 10;
 		}
 		?>
-		<h2><?php esc_html_e( 'Dating Profile Photos', 'dating-site-builder' ); ?></h2>
+		<h2><?php esc_html_e( 'Profile Photos', 'dating-site-builder' ); ?></h2>
 		<p class="description">
-			<?php esc_html_e( 'Manage this member\'s profile photos. The first photo is shown as their main photo. Drag the "Set Main" button to promote a photo, or remove photos that should no longer appear on their profile.', 'dating-site-builder' ); ?>
+			<?php esc_html_e( 'Manage this member\'s profile photos. The first photo is shown as their main photo.', 'dating-site-builder' ); ?>
 		</p>
 		<?php wp_nonce_field( 'dsb_user_photos_' . $user->ID, 'dsb_user_photos_nonce' ); ?>
 		<input type="hidden" name="dsb_user_photos_form" value="1">
@@ -2566,16 +2564,22 @@ class DSB_Admin {
 							<p class="dsb-user-photos-empty description">
 								<?php esc_html_e( 'No profile photos yet. Use the button below to add photos from the media library.', 'dating-site-builder' ); ?>
 							</p>
-						<?php else : ?>
-							<?php foreach ( $photos as $index => $photo_url ) : ?>
+				<?php else : ?>
+							<?php foreach ( $photos as $index => $photo ) : ?>
 								<div class="dsb-user-photo-item">
-									<img src="<?php echo esc_url( $photo_url ); ?>" alt="">
-									<input type="hidden" name="dsb_photos[]" value="<?php echo esc_attr( $photo_url ); ?>">
+									<img src="<?php echo esc_url( $photo['url'] ); ?>" alt="">
+									<input type="hidden" name="dsb_photos[]" value="<?php echo esc_attr( $photo['url'] ); ?>">
+									<input type="hidden" name="dsb_photo_privacy[]" value="<?php echo esc_attr( $photo['privacy'] ); ?>">
 									<div class="dsb-user-photo-actions">
 										<?php if ( 0 === $index ) : ?>
 											<span class="dsb-user-photo-main-badge"><?php esc_html_e( 'Main', 'dating-site-builder' ); ?></span>
 										<?php else : ?>
 											<button type="button" class="button button-small dsb-user-photo-make-main"><?php esc_html_e( 'Set Main', 'dating-site-builder' ); ?></button>
+										<?php endif; ?>
+										<?php if ( $private_enabled ) : ?>
+											<button type="button" class="button button-small dsb-user-photo-toggle-privacy">
+												<?php echo 'private' === $photo['privacy'] ? esc_html__( 'Private', 'dating-site-builder' ) : esc_html__( 'Public', 'dating-site-builder' ); ?>
+											</button>
 										<?php endif; ?>
 										<button type="button" class="button button-small dsb-user-photo-remove"><?php esc_html_e( 'Remove', 'dating-site-builder' ); ?></button>
 									</div>
@@ -2651,13 +2655,28 @@ class DSB_Admin {
 				});
 			}
 
-			function buildItem( url ){
+		function buildItem( url ){
 				var $item = $('<div class="dsb-user-photo-item"></div>');
 				$('<img alt="">').attr('src', url).appendTo($item);
 				$('<input type="hidden" name="dsb_photos[]">').val(url).appendTo($item);
+				$('<input type="hidden" name="dsb_photo_privacy[]">').val('public').appendTo($item);
 				$('<div class="dsb-user-photo-actions"></div>').appendTo($item);
 				return $item;
 			}
+
+			$list.on('click', '.dsb-user-photo-toggle-privacy', function(e){
+				e.preventDefault();
+				var $btn = $(this);
+				var $item = $btn.closest('.dsb-user-photo-item');
+				var $input = $item.find('input[name="dsb_photo_privacy[]"]');
+				if ( $input.val() === 'private' ) {
+					$input.val('public');
+					$btn.text('Public');
+				} else {
+					$input.val('private');
+					$btn.text('Private');
+				}
+			});
 
 			$list.on('click', '.dsb-user-photo-remove', function(e){
 				e.preventDefault();
@@ -2738,17 +2757,21 @@ class DSB_Admin {
 			$max_photos = 10;
 		}
 
-		$submitted = ( isset( $_POST['dsb_photos'] ) && is_array( $_POST['dsb_photos'] ) )
+		$submitted_urls = ( isset( $_POST['dsb_photos'] ) && is_array( $_POST['dsb_photos'] ) )
 			? wp_unslash( $_POST['dsb_photos'] )
+			: array();
+		$submitted_privacy = ( isset( $_POST['dsb_photo_privacy'] ) && is_array( $_POST['dsb_photo_privacy'] ) )
+			? wp_unslash( $_POST['dsb_photo_privacy'] )
 			: array();
 
 		$clean = array();
-		foreach ( $submitted as $url ) {
+		foreach ( $submitted_urls as $i => $url ) {
 			$url = esc_url_raw( $url );
 			if ( '' === $url ) {
 				continue;
 			}
-			$clean[] = $url;
+			$privacy = isset( $submitted_privacy[ $i ] ) && 'private' === $submitted_privacy[ $i ] ? 'private' : 'public';
+			$clean[] = array( 'url' => $url, 'privacy' => $privacy );
 			if ( count( $clean ) >= $max_photos ) {
 				break;
 			}
@@ -2756,10 +2779,7 @@ class DSB_Admin {
 
 		// Extra safety net: if the submitted form somehow has zero
 		// valid photo URLs but the user already has photos stored,
-		// keep the existing photos rather than wiping them. The admin
-		// can still clear photos one-by-one with the explicit
-		// "Remove" button (which removes the hidden input via JS and
-		// triggers a non-empty submission for the survivors).
+		// keep the existing photos rather than wiping them.
 		if ( empty( $clean ) ) {
 			$existing = get_user_meta( $user_id, 'dsb_photos', true );
 			if ( ! empty( $existing ) && is_array( $existing ) ) {
@@ -2984,6 +3004,13 @@ class DSB_Admin {
 			#your-profile tr.user-url-wrap,
 			#createuser tr.form-field:has(#url),
 			tr.form-field:has(input#url) { display: none !important; }
+
+			/* Dating Site Builder: hide the default WordPress "Profile Picture"
+			   (Gravatar) section — the plugin's own Dating Profile Photos
+			   section replaces it. Targets both the heading and the table row. */
+			tr.user-profile-picture,
+			#your-profile tr.user-profile-picture,
+			.user-profile-picture { display: none !important; }
 		</style>
 		<?php
 	}

@@ -355,6 +355,69 @@
 					}
 				});
 			});
+
+			// Toggle photo privacy (public/private)
+			$(document).on('click', '.dsb-toggle-photo-privacy', function(e) {
+				e.preventDefault();
+				const $button = $(this);
+				const index = $button.data('index');
+				$.post(dsbPublic.ajaxurl, {
+					action: 'dsb_toggle_photo_privacy',
+					nonce: dsbPublic.nonce,
+					index: index
+				}, function(response) {
+					if (response.success) {
+						location.reload();
+					}
+				});
+			});
+
+			// Request access to private photos
+			$(document).on('click', '.dsb-request-photo-access', function(e) {
+				e.preventDefault();
+				const $button = $(this);
+				const ownerId = $button.data('owner-id');
+				$button.prop('disabled', true).text('Requesting...');
+				$.post(dsbPublic.ajaxurl, {
+					action: 'dsb_request_photo_access',
+					nonce: dsbPublic.nonce,
+					owner_id: ownerId
+				}, function(response) {
+					if (response.success) {
+						// Replace all request buttons for this owner with a badge
+						$('.dsb-request-photo-access[data-owner-id="' + ownerId + '"]').each(function() {
+							$(this).replaceWith('<span class="dsb-photo-access-badge dsb-access-pending">Access Requested</span>');
+						});
+					} else {
+						$button.prop('disabled', false).text('Request Access');
+					}
+				});
+			});
+
+			// Approve/Deny photo access requests
+			$(document).on('click', '.dsb-approve-access, .dsb-deny-access', function(e) {
+				e.preventDefault();
+				const $button = $(this);
+				const requestId = $button.data('request-id');
+				const decision = $button.hasClass('dsb-approve-access') ? 'approved' : 'denied';
+				$button.closest('.dsb-access-request-actions').find('button').prop('disabled', true);
+				$.post(dsbPublic.ajaxurl, {
+					action: 'dsb_respond_photo_access',
+					nonce: dsbPublic.nonce,
+					request_id: requestId,
+					decision: decision
+				}, function(response) {
+					if (response.success) {
+						var $item = $button.closest('.dsb-access-request-item');
+						$item.slideUp(300, function() {
+							$item.remove();
+							if ($('.dsb-access-request-item').length === 0) {
+								$('.dsb-photo-access-requests').slideUp(300);
+							}
+						});
+					}
+				});
+			});
 		},
 
 		/**
