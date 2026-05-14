@@ -415,6 +415,43 @@
 	border-bottom: 2px solid var(--dsb-border-light);
 }
 
+.dsb-profile-completion {
+	max-width: 520px;
+	margin: 0.85rem auto 0;
+	padding: 0.75rem 0.95rem;
+	background: #fff7f9;
+	border: 1px solid #ffd7df;
+	border-radius: var(--dsb-radius);
+}
+
+.dsb-profile-completion-label {
+	margin: 0;
+	font-weight: 700;
+	color: var(--dsb-text-primary);
+}
+
+.dsb-profile-completion-track {
+	height: 10px;
+	margin: 0.55rem 0;
+	background: #ffe2e8;
+	border-radius: 999px;
+	overflow: hidden;
+}
+
+.dsb-profile-completion-fill {
+	display: block;
+	height: 100%;
+	background: var(--dsb-gradient-primary);
+	border-radius: 999px;
+	transition: width 0.35s ease;
+}
+
+.dsb-profile-completion-message {
+	margin: 0;
+	font-size: 0.9rem;
+	color: var(--dsb-text-secondary);
+}
+
 .dsb-photo-section {
 	margin-bottom: 2.5rem;
 	padding: 2rem;
@@ -1483,6 +1520,12 @@ body.dsb-member-page .is-layout-constrained > :where(:not(.alignleft):not(.align
 	position: relative !important;
 }
 
+.dsb-member-card-link-overlay {
+	position: absolute;
+	inset: 0;
+	z-index: 2;
+}
+
 .dsb-member-card:hover {
 	transform: translateY(-8px);
 	box-shadow: var(--dsb-shadow-xl);
@@ -1498,7 +1541,7 @@ body.dsb-member-page .is-layout-constrained > :where(:not(.alignleft):not(.align
 	border-radius: var(--dsb-radius);
 	font-weight: 700;
 	font-size: 0.875rem;
-	z-index: 10;
+	z-index: 3;
 	box-shadow: var(--dsb-shadow-lg);
 }
 
@@ -1541,6 +1584,22 @@ body.dsb-member-page .is-layout-constrained > :where(:not(.alignleft):not(.align
 	gap: 0.25rem;
 }
 
+.dsb-member-gender {
+	color: var(--dsb-text-secondary);
+	font-size: 0.82rem;
+	font-weight: 600;
+	margin: 0.25rem 0 0;
+}
+
+.dsb-member-photo-counts {
+	color: var(--dsb-text-secondary);
+	font-size: 0.8rem;
+	margin: 0.35rem 0 0;
+	display: flex;
+	align-items: center;
+	gap: 0.4rem;
+}
+
 .dsb-member-headline {
 	color: var(--dsb-text-secondary);
 	font-size: 0.825rem;
@@ -1556,6 +1615,8 @@ body.dsb-member-page .is-layout-constrained > :where(:not(.alignleft):not(.align
 	flex-direction: column;
 	gap: 0.5rem;
 	padding: 0 1rem 1rem;
+	position: relative;
+	z-index: 3;
 }
 
 .dsb-member-actions .dsb-view-profile-btn {
@@ -2845,18 +2906,22 @@ body.dsb-fullscreen-page .is-layout-constrained > :where(:not(.alignleft):not(.a
 }
 
 .dsb-chat-send-btn {
-	width: 44px;
+	min-width: 92px;
 	height: 44px;
+	padding: 0 18px;
 	border: none;
 	background: var(--dsb-gradient-primary);
 	color: white;
-	border-radius: 50%;
+	border-radius: 22px;
 	cursor: pointer;
 	display: flex;
+	gap: 8px;
 	align-items: center;
 	justify-content: center;
 	transition: var(--dsb-transition);
 	flex-shrink: 0;
+	font-weight: 600;
+	font-size: 0.95rem;
 }
 
 .dsb-chat-send-btn:hover {
@@ -2873,6 +2938,11 @@ body.dsb-fullscreen-page .is-layout-constrained > :where(:not(.alignleft):not(.a
 .dsb-chat-send-btn svg {
 	width: 20px;
 	height: 20px;
+	flex-shrink: 0;
+}
+
+.dsb-chat-send-label {
+	line-height: 1;
 }
 
 /* Chat sidebar */

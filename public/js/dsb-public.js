@@ -656,7 +656,7 @@
 				e.preventDefault();
 				
 				// Get filter values
-				const gender = $('#dsb-filter-gender').val();
+				const profileKind = $('#dsb-filter-profile-kind').val();
 				const ageMin = $('#dsb-filter-age-min').val();
 				const ageMax = $('#dsb-filter-age-max').val();
 				const location = $('#dsb-filter-location').val();
@@ -665,7 +665,7 @@
 				let url = window.location.pathname;
 				const params = [];
 				
-				if (gender) params.push('gender=' + encodeURIComponent(gender));
+				if (profileKind) params.push('profile_kind=' + encodeURIComponent(profileKind));
 				if (ageMin) params.push('age_min=' + encodeURIComponent(ageMin));
 				if (ageMax) params.push('age_max=' + encodeURIComponent(ageMax));
 				if (location) params.push('location=' + encodeURIComponent(location));

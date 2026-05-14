@@ -1538,15 +1538,30 @@ class DSB_Admin {
 		$search = isset( $_GET['s'] ) ? sanitize_text_field( $_GET['s'] ) : '';
 		$paged = isset( $_GET['paged'] ) ? intval( $_GET['paged'] ) : 1;
 		$per_page = 20;
+		$orderby = isset( $_GET['orderby'] ) ? sanitize_key( wp_unslash( $_GET['orderby'] ) ) : 'registered';
+		$order   = isset( $_GET['order'] ) ? strtoupper( sanitize_key( wp_unslash( $_GET['order'] ) ) ) : 'DESC';
+
+		$sortable_columns = array( 'display_name', 'email', 'registered', 'status' );
+		if ( ! in_array( $orderby, $sortable_columns, true ) ) {
+			$orderby = 'registered';
+		}
+		if ( ! in_array( $order, array( 'ASC', 'DESC' ), true ) ) {
+			$order = 'DESC';
+		}
 
 		// Build user query args
 		$args = array(
 			'role__in'    => array( 'dating_member', 'dating_premium' ),
-			'number'      => $per_page,
-			'offset'      => ( $paged - 1 ) * $per_page,
-			'orderby'     => 'registered',
-			'order'       => 'DESC',
 		);
+
+		if ( 'status' === $orderby ) {
+			$args['number'] = -1;
+		} else {
+			$args['number']  = $per_page;
+			$args['offset']  = ( $paged - 1 ) * $per_page;
+			$args['orderby'] = $orderby;
+			$args['order']   = $order;
+		}
 
 		if ( $search ) {
 			$args['search'] = '*' . $search . '*';
@@ -1572,6 +1587,36 @@ class DSB_Admin {
 		$members = $user_query->get_results();
 		$total_members = $user_query->get_total();
 		$total_pages = ceil( $total_members / $per_page );
+
+		if ( 'status' === $orderby ) {
+			usort(
+				$members,
+				function ( $left, $right ) use ( $order ) {
+					$left_rank  = $this->get_member_status_rank( $left );
+					$right_rank = $this->get_member_status_rank( $right );
+
+					if ( $left_rank === $right_rank ) {
+						$left_name  = isset( $left->display_name ) ? (string) $left->display_name : '';
+						$right_name = isset( $right->display_name ) ? (string) $right->display_name : '';
+						$comparison = strcasecmp( $left_name, $right_name );
+
+						if ( 0 === $comparison ) {
+							return (int) $left->ID <=> (int) $right->ID;
+						}
+
+						return $comparison;
+					}
+
+					return $left_rank <=> $right_rank;
+				}
+			);
+
+			if ( 'DESC' === $order ) {
+				$members = array_reverse( $members );
+			}
+
+			$members = array_slice( $members, ( $paged - 1 ) * $per_page, $per_page );
+		}
 
 		// Count stats
 		$all_count = count( get_users( array( 'role__in' => array( 'dating_member', 'dating_premium' ), 'fields' => 'ID' ) ) );
@@ -1669,10 +1714,10 @@ class DSB_Admin {
 						<tr>
 							<td class="manage-column column-cb check-column"><input type="checkbox" id="cb-select-all-1"></td>
 							<th scope="col"><?php esc_html_e( 'Photo', 'dating-site-builder' ); ?></th>
-							<th scope="col"><?php esc_html_e( 'Username', 'dating-site-builder' ); ?></th>
-							<th scope="col"><?php esc_html_e( 'Email', 'dating-site-builder' ); ?></th>
-							<th scope="col"><?php esc_html_e( 'Registered', 'dating-site-builder' ); ?></th>
-							<th scope="col"><?php esc_html_e( 'Status', 'dating-site-builder' ); ?></th>
+							<?php $this->render_member_sortable_th( __( 'Username', 'dating-site-builder' ), 'display_name', $orderby, $order, $filter, $search ); ?>
+							<?php $this->render_member_sortable_th( __( 'Email', 'dating-site-builder' ), 'email', $orderby, $order, $filter, $search ); ?>
+							<?php $this->render_member_sortable_th( __( 'Registered', 'dating-site-builder' ), 'registered', $orderby, $order, $filter, $search ); ?>
+							<?php $this->render_member_sortable_th( __( 'Status', 'dating-site-builder' ), 'status', $orderby, $order, $filter, $search ); ?>
 							<th scope="col"><?php esc_html_e( 'Actions', 'dating-site-builder' ); ?></th>
 						</tr>
 					</thead>
@@ -1763,6 +1808,74 @@ class DSB_Admin {
 			.dsb-members-search-form { float: right; clear: both; margin-bottom: 10px; }
 		</style>
 		<?php
+	}
+
+	/**
+	 * Render a sortable members table header.
+	 *
+	 * @param string $label Column label.
+	 * @param string $column Sort column key.
+	 * @param string $current_orderby Current active orderby key.
+	 * @param string $current_order Current active order direction.
+	 * @param string $filter Current filter value.
+	 * @param string $search Current search term.
+	 */
+	private function render_member_sortable_th( $label, $column, $current_orderby, $current_order, $filter, $search ) {
+		$is_sorted  = ( $current_orderby === $column );
+		$next_order = $is_sorted && 'ASC' === $current_order ? 'DESC' : 'ASC';
+
+		$args = array(
+			'page'    => 'dsb-members',
+			'orderby' => $column,
+			'order'   => $next_order,
+			'paged'   => 1,
+		);
+
+		if ( 'all' !== $filter ) {
+			$args['filter'] = $filter;
+		}
+
+		if ( '' !== $search ) {
+			$args['s'] = $search;
+		}
+
+		$sort_url    = add_query_arg( $args, admin_url( 'admin.php' ) );
+		$sort_class  = $is_sorted ? 'sorted ' . strtolower( $current_order ) : 'sortable';
+		$aria_sort   = $is_sorted ? strtolower( $current_order ) : 'none';
+		$indicator   = $is_sorted ? ( 'ASC' === $current_order ? '▲' : '▼' ) : '↕';
+		?>
+		<th scope="col" class="manage-column column-<?php echo esc_attr( $column ); ?> <?php echo esc_attr( $sort_class ); ?>" aria-sort="<?php echo esc_attr( $aria_sort ); ?>">
+			<a href="<?php echo esc_url( $sort_url ); ?>" class="dsb-member-sort-link">
+				<span><?php echo esc_html( $label ); ?></span>
+				<span class="dsb-sort-indicator" aria-hidden="true"><?php echo esc_html( $indicator ); ?></span>
+			</a>
+		</th>
+		<?php
+	}
+
+	/**
+	 * Convert a member object into a sortable status rank.
+	 *
+	 * @param WP_User $member Member object.
+	 * @return int
+	 */
+	private function get_member_status_rank( $member ) {
+		$is_banned = get_user_meta( $member->ID, 'dsb_banned', true );
+		if ( $is_banned ) {
+			return 3;
+		}
+
+		$is_suspended = get_user_meta( $member->ID, 'dsb_suspended', true );
+		if ( $is_suspended ) {
+			return 2;
+		}
+
+		$is_approved = get_user_meta( $member->ID, 'dsb_profile_approved', true );
+		if ( ! $is_approved ) {
+			return 1;
+		}
+
+		return 0;
 	}
 
 	/**
@@ -3314,7 +3427,29 @@ class DSB_Admin {
 			tr.user-profile-picture,
 			#your-profile tr.user-profile-picture,
 			.user-profile-picture { display: none !important; }
+
+			/* Dating Site Builder: hide the standard WordPress Personal Options
+			   rows on profile / user-edit screens to keep the moderation UI
+			   focused on dating-site fields only. */
+			tr.user-admin-color-wrap,
+			#your-profile tr.user-admin-color-wrap,
+			tr.user-comment-shortcuts-wrap,
+			#your-profile tr.user-comment-shortcuts-wrap,
+			tr.show-admin-bar,
+			#your-profile tr.show-admin-bar,
+			tr.user-language-wrap,
+			#your-profile tr.user-language-wrap { display: none !important; }
 		</style>
+		<script>
+			document.addEventListener('DOMContentLoaded', function() {
+				var headings = document.querySelectorAll('#your-profile h2, #your-profile h3');
+				headings.forEach(function(heading) {
+					if (heading.textContent && heading.textContent.trim() === 'Personal Options') {
+						heading.style.display = 'none';
+					}
+				});
+			});
+		</script>
 		<?php
 	}
 }

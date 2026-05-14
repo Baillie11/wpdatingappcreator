@@ -216,6 +216,24 @@
 	background: #f8f9fa;
 }
 
+.dsb-member-sort-link {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	color: inherit;
+	text-decoration: none;
+}
+
+.dsb-member-sort-link:hover {
+	text-decoration: underline;
+}
+
+.dsb-sort-indicator {
+	font-size: 0.75em;
+	line-height: 1;
+	opacity: 0.75;
+}
+
 /* Loading */
 .dsb-loading {
 	display: inline-block;

@@ -1647,6 +1647,20 @@ class DSB_Frontend {
 		$user_id = get_current_user_id();
 		$user = get_userdata( $user_id );
 		$fields = DSB_Profile_Fields::get_edit_fields();
+		$profile_completion = $this->calculate_profile_completion( $user_id, $fields );
+
+		global $wpdb;
+		$total_members = count_users();
+		$total_dating_members = isset( $total_members['avail_roles']['dating_member'] ) ? $total_members['avail_roles']['dating_member'] : 0;
+		$total_dating_members += isset( $total_members['avail_roles']['dating_premium'] ) ? $total_members['avail_roles']['dating_premium'] : 0;
+
+		$member_position = $wpdb->get_var( $wpdb->prepare(
+			"SELECT COUNT(*) FROM $wpdb->users u
+			INNER JOIN $wpdb->usermeta um ON u.ID = um.user_id
+			WHERE um.meta_key = 'dsb_profile_kind'
+			AND u.ID <= %d",
+			$user_id
+		) );
 
 		ob_start();
 		echo $this->render_app_header( 'profile' );
@@ -1658,6 +1672,20 @@ class DSB_Frontend {
 				
 				<div class="dsb-profile-header">
 					<h2><?php _e( 'Edit Your Profile', 'dating-site-builder' ); ?></h2>
+					<?php if ( $member_position && $total_dating_members ) : ?>
+						<p class="dsb-profile-member-number">
+							<?php printf( esc_html__( 'Member %d of %d', 'dating-site-builder' ), esc_html( $member_position ), esc_html( $total_dating_members ) ); ?>
+						</p>
+					<?php endif; ?>
+					<div class="dsb-profile-completion" role="status" aria-live="polite">
+						<p class="dsb-profile-completion-label">
+							<?php printf( esc_html__( 'Profile Complete: %d%%', 'dating-site-builder' ), esc_html( $profile_completion['percent'] ) ); ?>
+						</p>
+						<div class="dsb-profile-completion-track" aria-hidden="true">
+							<span class="dsb-profile-completion-fill" style="width: <?php echo esc_attr( $profile_completion['percent'] ); ?>%;"></span>
+						</div>
+						<p class="dsb-profile-completion-message"><?php echo esc_html( $profile_completion['message'] ); ?></p>
+					</div>
 				</div>
 
 				<!-- Photo Upload Section -->
@@ -1845,6 +1873,49 @@ class DSB_Frontend {
 					<?php _e( 'Save Profile', 'dating-site-builder' ); ?>
 				</button>
 			</form>
+
+			<section class="dsb-profile-section dsb-account-management">
+				<h3><?php esc_html_e( 'Account Management', 'dating-site-builder' ); ?></h3>
+				<p class="dsb-profile-bio"><?php esc_html_e( 'Need a break? You can suspend your account temporarily, or cancel it to permanently remove your profile and data.', 'dating-site-builder' ); ?></p>
+				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" class="dsb-account-action-form dsb-inline-form">
+					<input type="hidden" name="action" value="dsb_account_action">
+					<?php wp_nonce_field( 'dsb_account_action_' . $current_user_id, 'dsb_account_nonce' ); ?>
+					<label for="dsb-account-action-type" class="dsb-account-reason-label"><?php esc_html_e( 'What would you like to do?', 'dating-site-builder' ); ?></label>
+					<select id="dsb-account-action-type" name="dsb_account_action" class="dsb-account-reason-field dsb-account-action-select">
+						<option value="suspend"><?php esc_html_e( 'Suspend Account', 'dating-site-builder' ); ?></option>
+						<option value="delete"><?php esc_html_e( 'Cancel Account (Delete)', 'dating-site-builder' ); ?></option>
+					</select>
+					<div class="dsb-account-reason-group dsb-account-reason-group-suspend">
+						<label for="dsb-suspend-reason" class="dsb-account-reason-label"><?php esc_html_e( 'Reason for suspension', 'dating-site-builder' ); ?></label>
+						<select id="dsb-suspend-reason" name="dsb_account_reason_suspend" class="dsb-account-reason-field">
+							<?php foreach ( DSB_Profile_Fields::get_account_reason_groups( 'suspend' ) as $group_label => $reasons ) : ?>
+								<optgroup label="<?php echo esc_attr( $group_label ); ?>">
+									<?php foreach ( $reasons as $reason_key => $reason_label ) : ?>
+										<option value="<?php echo esc_attr( $reason_key ); ?>"><?php echo esc_html( $reason_label ); ?></option>
+									<?php endforeach; ?>
+								</optgroup>
+							<?php endforeach; ?>
+						</select>
+					</div>
+					<div class="dsb-account-reason-group dsb-account-reason-group-delete" style="display:none;">
+						<label for="dsb-cancel-reason" class="dsb-account-reason-label"><?php esc_html_e( 'Reason for cancellation', 'dating-site-builder' ); ?></label>
+						<select id="dsb-cancel-reason" name="dsb_account_reason_cancel" class="dsb-account-reason-field">
+							<?php foreach ( DSB_Profile_Fields::get_account_reason_groups( 'delete' ) as $group_label => $reasons ) : ?>
+								<optgroup label="<?php echo esc_attr( $group_label ); ?>">
+									<?php foreach ( $reasons as $reason_key => $reason_label ) : ?>
+										<option value="<?php echo esc_attr( $reason_key ); ?>"><?php echo esc_html( $reason_label ); ?></option>
+									<?php endforeach; ?>
+								</optgroup>
+							<?php endforeach; ?>
+						</select>
+					</div>
+					<label for="dsb-account-reason-note" class="dsb-account-reason-label"><?php esc_html_e( 'Extra details (optional)', 'dating-site-builder' ); ?></label>
+					<textarea id="dsb-account-reason-note" name="dsb_account_reason_note" rows="2" class="dsb-account-reason-field" placeholder="<?php echo esc_attr__( 'Add any extra context...', 'dating-site-builder' ); ?>"></textarea>
+					<button type="submit" class="dsb-btn dsb-btn-secondary dsb-account-action-submit" onclick="return confirm('<?php echo esc_js( __( 'Continue with this account action?', 'dating-site-builder' ) ); ?>');">
+						<?php esc_html_e( 'Submit', 'dating-site-builder' ); ?>
+					</button>
+				</form>
+			</section>
 		</div>
 		</div><!-- .dsb-app-content -->
 		<script>
@@ -1860,8 +1931,17 @@ class DSB_Frontend {
 				$editWrapper.toggleClass('dsb-couple-layout', couple);
 				$('.dsb-profile-fields [data-requires-couple="1"]').toggle( couple );
 			}
++
++			function dsbToggleAccountReasonGroups() {
++				var action = $('#dsb-account-action-type').val();
++				$('.dsb-account-reason-group-suspend').toggle(action === 'suspend');
++				$('.dsb-account-reason-group-delete').toggle(action === 'delete');
++			}
++
 			dsbToggleCoupleFields();
++			dsbToggleAccountReasonGroups();
 			$(document).on('change', '#field_profile_kind', dsbToggleCoupleFields);
++			$(document).on('change', '#dsb-account-action-type', dsbToggleAccountReasonGroups);
 		});
 		</script>
 		<?php
@@ -1921,21 +2001,6 @@ class DSB_Frontend {
 		if ( $user_id !== $current_user_id ) {
 			$this->track_profile_view( $user_id, $current_user_id );
 		}
-
-		// Get member number and total count
-		global $wpdb;
-		$total_members = count_users();
-		$total_dating_members = isset( $total_members['avail_roles']['dating_member'] ) ? $total_members['avail_roles']['dating_member'] : 0;
-		$total_dating_members += isset( $total_members['avail_roles']['dating_premium'] ) ? $total_members['avail_roles']['dating_premium'] : 0;
-
-		// Get member position (ordinal number based on user_id)
-		$member_position = $wpdb->get_var( $wpdb->prepare(
-			"SELECT COUNT(*) FROM $wpdb->users u
-			INNER JOIN $wpdb->usermeta um ON u.ID = um.user_id
-			WHERE um.meta_key = 'dsb_profile_kind'
-			AND u.ID <= %d",
-			$user_id
-		) );
 
 		$fields            = DSB_Profile_Fields::get_all_fields();
 		$age               = $this->calculate_age( get_user_meta( $user_id, 'dsb_date_of_birth', true ) );
@@ -2083,11 +2148,6 @@ class DSB_Frontend {
 						<?php endif; ?>
 						<?php if ( $location ) : ?>
 							<p class="dsb-profile-location"><?php echo esc_html( $location ); ?></p>
-						<?php endif; ?>
-						<?php if ( $member_position && $total_dating_members ) : ?>
-							<p class="dsb-profile-member-number">
-								<?php printf( esc_html__( 'Member %d of %d', 'dating-site-builder' ), esc_html( $member_position ), esc_html( $total_dating_members ) ); ?>
-							</p>
 						<?php endif; ?>
 					</div>
 
@@ -2400,6 +2460,8 @@ class DSB_Frontend {
 			$profile_kind = '';
 		}
 
+		$has_directory_filters = ( '' !== $profile_kind || $age_min || $age_max || '' !== $location );
+
 		// Build user query
 		$args = array(
 			'role__in' => array( 'dating_member', 'dating_premium' ),
@@ -2419,6 +2481,14 @@ class DSB_Frontend {
 				),
 			),
 		);
+
+		if ( $has_directory_filters ) {
+			$args['meta_query'][] = array(
+				'key'     => 'dsb_profile_kind',
+				'value'   => '',
+				'compare' => '!=',
+			);
+		}
 
 		if ( $profile_kind ) {
 			$args['meta_query'][] = array(
@@ -2716,30 +2786,62 @@ class DSB_Frontend {
 		$age = $this->calculate_age( get_user_meta( $user_id, 'dsb_date_of_birth', true ) );
 		$city = get_user_meta( $user_id, 'dsb_city', true );
 		$country = get_user_meta( $user_id, 'dsb_country', true );
-		$main_photo = $this->get_main_photo( $user_id );
+		$profile_kind = (string) get_user_meta( $user_id, 'dsb_profile_kind', true );
+		$gender_label = '';
+		if ( '' !== $profile_kind ) {
+			$all_fields = DSB_Profile_Fields::get_all_fields();
+			if ( isset( $all_fields['profile_kind']['options'][ $profile_kind ] ) ) {
+				$gender_label = (string) $all_fields['profile_kind']['options'][ $profile_kind ];
+			}
+		}
+		if ( '' === $gender_label ) {
+			$legacy_gender = (string) get_user_meta( $user_id, 'dsb_gender', true );
+			if ( '' !== $legacy_gender ) {
+				$gender_label = ucwords( str_replace( array( '_', '-' ), ' ', $legacy_gender ) );
+			}
+		}
+		$photos = self::normalize_photos( get_user_meta( $user_id, 'dsb_photos', true ) );
+		$main_photo = ! empty( $photos ) ? $photos[0]['url'] : get_avatar_url( $user_id, array( 'size' => 400 ) );
+		$public_photo_count = 0;
+		$private_photo_count = 0;
+		foreach ( $photos as $photo ) {
+			if ( isset( $photo['privacy'] ) && 'private' === $photo['privacy'] ) {
+				$private_photo_count++;
+			} else {
+				$public_photo_count++;
+			}
+		}
 		$is_liked = DSB_Likes::has_liked( get_current_user_id(), $user_id );
+		$profile_url = add_query_arg( 'profile_user', $user_id, get_permalink( get_option( 'dsb_profile_view_page' ) ) );
+		$message_url = add_query_arg( 'conversation', $user_id, get_permalink( get_option( 'dsb_messages_page' ) ) );
 
 		ob_start();
 		?>
 		<div class="dsb-member-card">
+			<a href="<?php echo esc_url( $profile_url ); ?>" class="dsb-member-card-link-overlay" aria-label="<?php echo esc_attr( sprintf( __( 'View profile of %s', 'dating-site-builder' ), $user->display_name ) ); ?>"></a>
 			<?php if ( $match_score > 0 ) : ?>
 				<div class="dsb-match-score"><?php echo round( $match_score ); ?>% <?php _e( 'Match', 'dating-site-builder' ); ?></div>
 			<?php endif; ?>
 			
 			<div class="dsb-member-photo" style="background-image: url('<?php echo esc_url( $main_photo ); ?>');">
-				<a href="<?php echo esc_url( add_query_arg( 'profile_user', $user_id, get_permalink( get_option( 'dsb_profile_view_page' ) ) ) ); ?>"></a>
 			</div>
 			
 			<div class="dsb-member-info">
 				<h3><?php echo esc_html( $user->display_name ); ?>, <?php echo esc_html( $age ); ?></h3>
+				<?php if ( '' !== $gender_label ) : ?>
+					<p class="dsb-member-gender"><?php printf( esc_html__( 'Gender: %s', 'dating-site-builder' ), esc_html( $gender_label ) ); ?></p>
+				<?php endif; ?>
 				<?php if ( $city || $country ) : ?>
 					<p class="dsb-member-location"><?php echo esc_html( $city ? $city . ', ' : '' ); ?><?php echo esc_html( $country ); ?></p>
 				<?php endif; ?>
+				<p class="dsb-member-photo-counts">
+					<?php printf( esc_html__( 'Public: %d', 'dating-site-builder' ), esc_html( $public_photo_count ) ); ?>
+					<span aria-hidden="true">|</span>
+					<?php printf( esc_html__( 'Private: %d', 'dating-site-builder' ), esc_html( $private_photo_count ) ); ?>
+				</p>
 			</div>
 			
 			<?php
-			$profile_url = add_query_arg( 'profile_user', $user_id, get_permalink( get_option( 'dsb_profile_view_page' ) ) );
-			$message_url = add_query_arg( 'conversation', $user_id, get_permalink( get_option( 'dsb_messages_page' ) ) );
 			$like_hint = $is_liked
 				? __( 'You\'ve liked this member. Click to remove your like.', 'dating-site-builder' )
 				: __( 'Like this member to let them know you\'re interested. If they like you back it\'s a match!', 'dating-site-builder' );
@@ -2923,6 +3025,87 @@ class DSB_Frontend {
 			return $photos[0]['url'];
 		}
 		return get_avatar_url( $user_id, array( 'size' => 400 ) );
+	}
+
+	/**
+	 * Calculate profile completion for edit screen.
+	 *
+	 * @param int   $user_id Current member ID.
+	 * @param array $fields  Editable profile field definitions.
+	 * @return array{percent:int,completed:int,total:int,message:string}
+	 */
+	private function calculate_profile_completion( $user_id, $fields ) {
+		$profile_kind = (string) get_user_meta( $user_id, 'dsb_profile_kind', true );
+		$is_couple    = 0 === strpos( $profile_kind, 'couple_' );
+
+		$total_fields     = 0;
+		$completed_fields = 0;
+
+		foreach ( $fields as $field_key => $field ) {
+			if ( ! empty( $field['requires_couple'] ) && ! $is_couple ) {
+				continue;
+			}
+
+			$value = get_user_meta( $user_id, 'dsb_' . $field_key, true );
+			if ( ( '' === $value || null === $value ) && 0 === strpos( $field_key, 'partner_2_' ) ) {
+				$legacy_field_key = 'partner_' . substr( $field_key, 10 );
+				$legacy_value     = get_user_meta( $user_id, 'dsb_' . $legacy_field_key, true );
+				if ( '' !== $legacy_value && null !== $legacy_value ) {
+					$value = $legacy_value;
+				}
+			}
+
+			$total_fields++;
+			if ( $this->profile_field_has_value( $value ) ) {
+				$completed_fields++;
+			}
+		}
+
+		// Count having at least one uploaded photo as a completion item.
+		$total_fields++;
+		$photos = self::normalize_photos( get_user_meta( $user_id, 'dsb_photos', true ) );
+		if ( ! empty( $photos ) ) {
+			$completed_fields++;
+		}
+
+		$percent = 0;
+		if ( $total_fields > 0 ) {
+			$percent = (int) round( ( $completed_fields / $total_fields ) * 100 );
+		}
+
+		if ( $percent >= 100 ) {
+			$message = __( 'Great work. Your profile is complete and ready to stand out in searches.', 'dating-site-builder' );
+		} elseif ( $percent >= 70 ) {
+			$message = __( 'You are close. Add a little more detail to improve visibility in member searches.', 'dating-site-builder' );
+		} else {
+			$message = __( 'Complete your profile to appear in more searches and get better matches.', 'dating-site-builder' );
+		}
+
+		return array(
+			'percent'   => $percent,
+			'completed' => $completed_fields,
+			'total'     => $total_fields,
+			'message'   => $message,
+		);
+	}
+
+	/**
+	 * Determine whether a profile field value should count as completed.
+	 *
+	 * @param mixed $value Field value from user meta.
+	 * @return bool
+	 */
+	private function profile_field_has_value( $value ) {
+		if ( is_array( $value ) ) {
+			$filtered = array_filter( array_map( 'strval', $value ), 'strlen' );
+			return ! empty( $filtered );
+		}
+
+		if ( null === $value ) {
+			return false;
+		}
+
+		return '' !== trim( (string) $value );
 	}
 
 	/**
@@ -3458,10 +3641,11 @@ class DSB_Frontend {
 							</div>
 							<div class="dsb-chat-input-container">
 								<input type="text" id="dsb-chat-input" name="message" placeholder="<?php esc_attr_e( 'Type your message...', 'dating-site-builder' ); ?>" maxlength="1000" autocomplete="off" />
-								<button type="submit" class="dsb-chat-send-btn" id="dsb-chat-send">
+								<button type="submit" class="dsb-chat-send-btn" id="dsb-chat-send" aria-label="<?php esc_attr_e( 'Send message', 'dating-site-builder' ); ?>">
 									<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="24" height="24">
 										<path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
 									</svg>
+									<span class="dsb-chat-send-label"><?php esc_html_e( 'Send', 'dating-site-builder' ); ?></span>
 								</button>
 							</div>
 						</form>
