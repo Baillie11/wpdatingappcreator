@@ -1416,6 +1416,69 @@ class DSB_Admin {
 	 * Render members page.
 	 */
 	public function render_members() {
+		// Handle single-row POST actions with reason fields.
+		if ( isset( $_POST['dsb_single_action'], $_POST['user_id'] ) ) {
+			$user_id = intval( $_POST['user_id'] );
+			check_admin_referer( 'dsb_member_action_' . $user_id, 'dsb_member_nonce' );
+
+			$action = sanitize_key( wp_unslash( $_POST['dsb_single_action'] ) );
+			$reason = isset( $_POST['dsb_action_reason'] ) ? sanitize_textarea_field( wp_unslash( $_POST['dsb_action_reason'] ) ) : '';
+
+			if ( $user_id > 0 ) {
+				switch ( $action ) {
+					case 'approve':
+						update_user_meta( $user_id, 'dsb_profile_approved', '1' );
+						break;
+					case 'suspend':
+						update_user_meta( $user_id, 'dsb_suspended', '1' );
+						update_user_meta( $user_id, 'dsb_suspended_at', current_time( 'mysql' ) );
+						if ( '' !== trim( $reason ) ) {
+							update_user_meta( $user_id, 'dsb_suspended_reason', $reason );
+						}
+						break;
+					case 'unsuspend':
+						delete_user_meta( $user_id, 'dsb_suspended' );
+						delete_user_meta( $user_id, 'dsb_suspended_reason' );
+						break;
+					case 'ban':
+						update_user_meta( $user_id, 'dsb_banned', '1' );
+						break;
+					case 'unban':
+						delete_user_meta( $user_id, 'dsb_banned' );
+						break;
+					case 'delete':
+						$member = get_userdata( $user_id );
+						if ( $member ) {
+							$cancellation_log = get_option( 'dsb_account_cancellation_log', array() );
+							if ( ! is_array( $cancellation_log ) ) {
+								$cancellation_log = array();
+							}
+							$cancellation_log[] = array(
+								'user_id'      => $user_id,
+								'user_login'   => $member->user_login,
+								'user_email'   => $member->user_email,
+								'display_name' => $member->display_name,
+								'reason'       => $reason,
+								'source'       => 'admin',
+								'admin_id'     => get_current_user_id(),
+								'created_at'   => current_time( 'mysql' ),
+							);
+							if ( count( $cancellation_log ) > 200 ) {
+								$cancellation_log = array_slice( $cancellation_log, -200 );
+							}
+							update_option( 'dsb_account_cancellation_log', $cancellation_log, false );
+						}
+						require_once ABSPATH . 'wp-admin/includes/user.php';
+						wp_delete_user( $user_id );
+						break;
+				}
+			}
+
+			$redirect_url = remove_query_arg( array( 'action', 'user_id', '_wpnonce' ) );
+			wp_safe_redirect( add_query_arg( 'dsb_notice', 'member-updated', $redirect_url ) );
+			exit;
+		}
+
 		// Handle single-row actions
 		if ( isset( $_GET['action'], $_GET['user_id'] ) && in_array( $_GET['action'], array( 'approve', 'suspend', 'unsuspend', 'ban', 'unban', 'delete' ), true ) ) {
 			check_admin_referer( 'dsb_member_action' );
@@ -1430,9 +1493,11 @@ class DSB_Admin {
 						break;
 					case 'suspend':
 						update_user_meta( $user_id, 'dsb_suspended', '1' );
+						update_user_meta( $user_id, 'dsb_suspended_at', current_time( 'mysql' ) );
 						break;
 					case 'unsuspend':
 						delete_user_meta( $user_id, 'dsb_suspended' );
+						delete_user_meta( $user_id, 'dsb_suspended_reason' );
 						break;
 					case 'ban':
 						update_user_meta( $user_id, 'dsb_banned', '1' );
@@ -1441,6 +1506,27 @@ class DSB_Admin {
 						delete_user_meta( $user_id, 'dsb_banned' );
 						break;
 					case 'delete':
+						$member = get_userdata( $user_id );
+						if ( $member ) {
+							$cancellation_log = get_option( 'dsb_account_cancellation_log', array() );
+							if ( ! is_array( $cancellation_log ) ) {
+								$cancellation_log = array();
+							}
+							$cancellation_log[] = array(
+								'user_id'      => $user_id,
+								'user_login'   => $member->user_login,
+								'user_email'   => $member->user_email,
+								'display_name' => $member->display_name,
+								'reason'       => '',
+								'source'       => 'admin',
+								'admin_id'     => get_current_user_id(),
+								'created_at'   => current_time( 'mysql' ),
+							);
+							if ( count( $cancellation_log ) > 200 ) {
+								$cancellation_log = array_slice( $cancellation_log, -200 );
+							}
+							update_option( 'dsb_account_cancellation_log', $cancellation_log, false );
+						}
 						require_once ABSPATH . 'wp-admin/includes/user.php';
 						wp_delete_user( $user_id );
 						break;
@@ -1680,7 +1766,13 @@ class DSB_Admin {
 										<?php if ( $is_suspended ) : ?>
 											<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=dsb-members&action=unsuspend&user_id=' . $member->ID ), 'dsb_member_action' ) ); ?>" class="button button-small"><?php esc_html_e( 'Unsuspend', 'dating-site-builder' ); ?></a>
 										<?php else : ?>
-											<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=dsb-members&action=suspend&user_id=' . $member->ID ), 'dsb_member_action' ) ); ?>" class="button button-small"><?php esc_html_e( 'Suspend', 'dating-site-builder' ); ?></a>
+											<form method="post" class="dsb-member-action-form" style="display:inline-flex;gap:4px;align-items:center;">
+												<input type="hidden" name="dsb_single_action" value="suspend">
+												<input type="hidden" name="user_id" value="<?php echo esc_attr( $member->ID ); ?>">
+												<?php wp_nonce_field( 'dsb_member_action_' . $member->ID, 'dsb_member_nonce' ); ?>
+												<input type="text" name="dsb_action_reason" class="small-text" placeholder="<?php echo esc_attr__( 'Suspend reason', 'dating-site-builder' ); ?>" style="width:130px;">
+												<button type="submit" class="button button-small"><?php esc_html_e( 'Suspend', 'dating-site-builder' ); ?></button>
+											</form>
 										<?php endif; ?>
 										<?php if ( $is_banned ) : ?>
 											<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=dsb-members&action=unban&user_id=' . $member->ID ), 'dsb_member_action' ) ); ?>" class="button button-small"><?php esc_html_e( 'Unban', 'dating-site-builder' ); ?></a>
@@ -1690,7 +1782,22 @@ class DSB_Admin {
 										<?php if ( ! $is_approved ) : ?>
 											<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=dsb-members&action=approve&user_id=' . $member->ID ), 'dsb_member_action' ) ); ?>" class="button button-small button-primary"><?php esc_html_e( 'Approve', 'dating-site-builder' ); ?></a>
 										<?php endif; ?>
-										<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=dsb-members&action=delete&user_id=' . $member->ID ), 'dsb_member_action' ) ); ?>" class="button button-small" style="color:#b91c1c;" onclick="return confirm('<?php echo esc_js( __( 'Delete this account permanently?', 'dating-site-builder' ) ); ?>');"><?php esc_html_e( 'Delete', 'dating-site-builder' ); ?></a>
+										<form method="post" class="dsb-member-action-form" style="display:inline-flex;gap:4px;align-items:center;">
+											<input type="hidden" name="dsb_single_action" value="delete">
+											<input type="hidden" name="user_id" value="<?php echo esc_attr( $member->ID ); ?>">
+											<?php wp_nonce_field( 'dsb_member_action_' . $member->ID, 'dsb_member_nonce' ); ?>
+											<input type="text" name="dsb_action_reason" class="small-text" placeholder="<?php echo esc_attr__( 'Cancel reason', 'dating-site-builder' ); ?>" style="width:130px;">
+											<button type="submit" class="button button-small" style="color:#b91c1c;" onclick="return confirm('<?php echo esc_js( __( 'Delete this account permanently?', 'dating-site-builder' ) ); ?>');"><?php esc_html_e( 'Delete', 'dating-site-builder' ); ?></button>
+										</form>
+										<?php
+										$suspension_reason = trim( (string) get_user_meta( $member->ID, 'dsb_suspended_reason', true ) );
+										if ( $suspension_reason ) :
+										?>
+											<div style="margin-top:4px;color:#6b7280;font-size:11px;max-width:220px;">
+												<strong><?php esc_html_e( 'Suspend reason:', 'dating-site-builder' ); ?></strong>
+												<?php echo esc_html( $suspension_reason ); ?>
+											</div>
+										<?php endif; ?>
 									</td>
 								</tr>
 							<?php endforeach; ?>

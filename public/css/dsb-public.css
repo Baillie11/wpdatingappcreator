@@ -988,10 +988,30 @@
 
 .dsb-inline-form {
 	display: inline-flex;
+	flex-direction: column;
+	align-items: stretch;
+	gap: 0.4rem;
 }
 
 .dsb-account-actions {
 	gap: 0.75rem;
+}
+
+.dsb-account-reason-label {
+	font-size: 0.78rem;
+	color: var(--dsb-text-secondary);
+	font-weight: 600;
+}
+
+.dsb-account-reason-field {
+	min-width: 220px;
+	padding: 0.45rem 0.55rem;
+	font-size: 0.85rem;
+	color: #1f2937;
+	background: #ffffff;
+	border: 1px solid rgba(15, 23, 42, 0.16);
+	border-radius: 6px;
+	resize: vertical;
 }
 
 .dsb-profile-details {

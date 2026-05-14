@@ -2198,6 +2198,8 @@ class DSB_Frontend {
 									<input type="hidden" name="action" value="dsb_account_action">
 									<input type="hidden" name="dsb_account_action" value="suspend">
 									<?php wp_nonce_field( 'dsb_account_action_' . $current_user_id, 'dsb_account_nonce' ); ?>
+									<label for="dsb-suspend-reason" class="dsb-account-reason-label"><?php esc_html_e( 'Reason for suspension (optional)', 'dating-site-builder' ); ?></label>
+									<textarea id="dsb-suspend-reason" name="dsb_account_reason" rows="2" class="dsb-account-reason-field" placeholder="<?php echo esc_attr__( 'Tell us why you are suspending your account...', 'dating-site-builder' ); ?>"></textarea>
 									<button type="submit" class="dsb-btn dsb-btn-secondary" onclick="return confirm('<?php echo esc_js( __( 'Suspend your account now? You can contact an admin later to reactivate it.', 'dating-site-builder' ) ); ?>');">
 										<?php esc_html_e( 'Suspend Account', 'dating-site-builder' ); ?>
 									</button>
@@ -2206,6 +2208,8 @@ class DSB_Frontend {
 									<input type="hidden" name="action" value="dsb_account_action">
 									<input type="hidden" name="dsb_account_action" value="delete">
 									<?php wp_nonce_field( 'dsb_account_action_' . $current_user_id, 'dsb_account_nonce' ); ?>
+									<label for="dsb-cancel-reason" class="dsb-account-reason-label"><?php esc_html_e( 'Reason for cancellation (optional)', 'dating-site-builder' ); ?></label>
+									<textarea id="dsb-cancel-reason" name="dsb_account_reason" rows="2" class="dsb-account-reason-field" placeholder="<?php echo esc_attr__( 'Tell us why you are canceling your account...', 'dating-site-builder' ); ?>"></textarea>
 									<button type="submit" class="dsb-btn dsb-btn-text" style="color:#dc2626;" onclick="return confirm('<?php echo esc_js( __( 'This will permanently delete your account and dating profile data. Continue?', 'dating-site-builder' ) ); ?>');">
 										<?php esc_html_e( 'Cancel Account (Delete)', 'dating-site-builder' ); ?>
 									</button>
@@ -2233,6 +2237,7 @@ class DSB_Frontend {
 		$user_id = get_current_user_id();
 		$nonce   = isset( $_POST['dsb_account_nonce'] ) ? sanitize_text_field( wp_unslash( $_POST['dsb_account_nonce'] ) ) : '';
 		$action  = isset( $_POST['dsb_account_action'] ) ? sanitize_key( wp_unslash( $_POST['dsb_account_action'] ) ) : '';
+		$reason  = isset( $_POST['dsb_account_reason'] ) ? sanitize_textarea_field( wp_unslash( $_POST['dsb_account_reason'] ) ) : '';
 
 		if ( ! wp_verify_nonce( $nonce, 'dsb_account_action_' . $user_id ) ) {
 			wp_die( esc_html__( 'Security check failed.', 'dating-site-builder' ) );
@@ -2240,12 +2245,37 @@ class DSB_Frontend {
 
 		if ( 'suspend' === $action ) {
 			update_user_meta( $user_id, 'dsb_suspended', '1' );
+			update_user_meta( $user_id, 'dsb_suspended_at', current_time( 'mysql' ) );
+			if ( '' !== trim( $reason ) ) {
+				update_user_meta( $user_id, 'dsb_suspended_reason', $reason );
+			} else {
+				delete_user_meta( $user_id, 'dsb_suspended_reason' );
+			}
 			wp_logout();
 			wp_safe_redirect( add_query_arg( 'dsb_account_notice', 'suspended', $this->get_dsb_page_url( 'dsb_login_page', 'login' ) ) );
 			exit;
 		}
 
 		if ( 'delete' === $action ) {
+			$current_user = wp_get_current_user();
+			$cancellation_log = get_option( 'dsb_account_cancellation_log', array() );
+			if ( ! is_array( $cancellation_log ) ) {
+				$cancellation_log = array();
+			}
+			$cancellation_log[] = array(
+				'user_id'      => $user_id,
+				'user_login'   => $current_user->user_login,
+				'user_email'   => $current_user->user_email,
+				'display_name' => $current_user->display_name,
+				'reason'       => $reason,
+				'source'       => 'self',
+				'created_at'   => current_time( 'mysql' ),
+			);
+			if ( count( $cancellation_log ) > 200 ) {
+				$cancellation_log = array_slice( $cancellation_log, -200 );
+			}
+			update_option( 'dsb_account_cancellation_log', $cancellation_log, false );
+
 			require_once ABSPATH . 'wp-admin/includes/user.php';
 			wp_logout();
 			wp_delete_user( $user_id );
@@ -2947,7 +2977,13 @@ class DSB_Frontend {
 
 		if ( get_user_meta( $user->ID, 'dsb_suspended', true ) ) {
 			wp_logout();
-			wp_send_json_error( array( 'message' => __( 'Your account is suspended. Please contact support.', 'dating-site-builder' ) ) );
+			$suspended_reason = trim( (string) get_user_meta( $user->ID, 'dsb_suspended_reason', true ) );
+			$message = __( 'Your account is suspended. Please contact support.', 'dating-site-builder' );
+			if ( '' !== $suspended_reason ) {
+				/* translators: %s: suspension reason entered by member/admin. */
+				$message .= ' ' . sprintf( __( 'Reason: %s', 'dating-site-builder' ), $suspended_reason );
+			}
+			wp_send_json_error( array( 'message' => $message ) );
 		}
 
 		if ( get_user_meta( $user->ID, 'dsb_banned', true ) ) {
