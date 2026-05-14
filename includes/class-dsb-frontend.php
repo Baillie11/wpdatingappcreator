@@ -1506,6 +1506,7 @@ class DSB_Frontend {
 	 * Login form shortcode.
 	 */
 	public function shortcode_login( $atts ) {
+		$account_notice = isset( $_GET['dsb_account_notice'] ) ? sanitize_key( wp_unslash( $_GET['dsb_account_notice'] ) ) : '';
 		if ( is_user_logged_in() ) {
 			// Resolve where the logged-in member should actually land.
 			// Using get_dsb_page_url() guarantees a real URL even when
@@ -1583,6 +1584,11 @@ class DSB_Frontend {
 			</div>
 			<div class="dsb-fullscreen-content">
 				<div class="dsb-auth-container">
+					<?php if ( 'suspended' === $account_notice ) : ?>
+						<div class="dsb-form-message" style="display:block; margin-bottom: 1rem; color:#b45309; background:#fef3c7; border:1px solid #f59e0b; border-radius:8px; padding:0.75rem 1rem;">
+							<?php esc_html_e( 'Your account is suspended. Please contact support if you need it reactivated.', 'dating-site-builder' ); ?>
+						</div>
+					<?php endif; ?>
 					<div class="dsb-auth-branding dsb-auth-branding-logo-only">
 						<?php echo $this->render_auth_logo( '💕' ); ?>
 					</div>
@@ -1877,6 +1883,16 @@ class DSB_Frontend {
 
 		$user_id = intval( $atts['user_id'] );
 		$current_user_id = get_current_user_id();
+		$account_notice  = isset( $_GET['dsb_account_notice'] ) ? sanitize_key( wp_unslash( $_GET['dsb_account_notice'] ) ) : '';
+		$notice_message  = '';
+		$notice_class    = 'dsb-notice-success';
+
+		if ( 'updated' === $account_notice ) {
+			$notice_message = __( 'Your account has been updated.', 'dating-site-builder' );
+		} elseif ( 'error' === $account_notice ) {
+			$notice_message = __( 'Unable to update your account right now. Please try again.', 'dating-site-builder' );
+			$notice_class   = 'dsb-notice-error';
+		}
 
 		if ( ! $user_id || ! $current_user_id ) {
 			return '<p>' . __( 'Invalid profile.', 'dating-site-builder' ) . '</p>';
@@ -2044,6 +2060,11 @@ class DSB_Frontend {
 		?>
 		<div class="dsb-app-content">
 		<div class="dsb-profile-view-wrapper dsb-profile-view-narrow">
+			<?php if ( $notice_message ) : ?>
+				<div class="dsb-notice <?php echo esc_attr( $notice_class ); ?>">
+					<?php echo esc_html( $notice_message ); ?>
+				</div>
+			<?php endif; ?>
 			<div class="dsb-profile-card dsb-profile-card-stacked">
 				<div class="dsb-profile-photos">
 					<?php echo $this->render_user_photos( $user_id, false, $current_user_id ); ?>
@@ -2167,12 +2188,73 @@ class DSB_Frontend {
 							<?php esc_html_e( 'This member hasn\'t added any profile details yet.', 'dating-site-builder' ); ?>
 						</p>
 					<?php endif; ?>
+
+					<?php if ( $user_id === $current_user_id ) : ?>
+						<section class="dsb-profile-section dsb-account-management">
+							<h3><?php esc_html_e( 'Account Management', 'dating-site-builder' ); ?></h3>
+							<p class="dsb-profile-bio"><?php esc_html_e( 'Suspend your account to pause it temporarily. Cancel account will permanently delete your account and profile data.', 'dating-site-builder' ); ?></p>
+							<div class="dsb-profile-actions dsb-account-actions">
+								<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" class="dsb-inline-form">
+									<input type="hidden" name="action" value="dsb_account_action">
+									<input type="hidden" name="dsb_account_action" value="suspend">
+									<?php wp_nonce_field( 'dsb_account_action_' . $current_user_id, 'dsb_account_nonce' ); ?>
+									<button type="submit" class="dsb-btn dsb-btn-secondary" onclick="return confirm('<?php echo esc_js( __( 'Suspend your account now? You can contact an admin later to reactivate it.', 'dating-site-builder' ) ); ?>');">
+										<?php esc_html_e( 'Suspend Account', 'dating-site-builder' ); ?>
+									</button>
+								</form>
+								<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" class="dsb-inline-form">
+									<input type="hidden" name="action" value="dsb_account_action">
+									<input type="hidden" name="dsb_account_action" value="delete">
+									<?php wp_nonce_field( 'dsb_account_action_' . $current_user_id, 'dsb_account_nonce' ); ?>
+									<button type="submit" class="dsb-btn dsb-btn-text" style="color:#dc2626;" onclick="return confirm('<?php echo esc_js( __( 'This will permanently delete your account and dating profile data. Continue?', 'dating-site-builder' ) ); ?>');">
+										<?php esc_html_e( 'Cancel Account (Delete)', 'dating-site-builder' ); ?>
+									</button>
+								</form>
+							</div>
+						</section>
+					<?php endif; ?>
 				</div>
 			</div>
 		</div>
 		</div><!-- .dsb-app-content -->
 		<?php
 		return ob_get_clean();
+	}
+
+	/**
+	 * Process suspend/delete account requests submitted by members.
+	 */
+	public function handle_account_action() {
+		if ( ! is_user_logged_in() ) {
+			wp_safe_redirect( $this->get_dsb_page_url( 'dsb_login_page', 'login' ) );
+			exit;
+		}
+
+		$user_id = get_current_user_id();
+		$nonce   = isset( $_POST['dsb_account_nonce'] ) ? sanitize_text_field( wp_unslash( $_POST['dsb_account_nonce'] ) ) : '';
+		$action  = isset( $_POST['dsb_account_action'] ) ? sanitize_key( wp_unslash( $_POST['dsb_account_action'] ) ) : '';
+
+		if ( ! wp_verify_nonce( $nonce, 'dsb_account_action_' . $user_id ) ) {
+			wp_die( esc_html__( 'Security check failed.', 'dating-site-builder' ) );
+		}
+
+		if ( 'suspend' === $action ) {
+			update_user_meta( $user_id, 'dsb_suspended', '1' );
+			wp_logout();
+			wp_safe_redirect( add_query_arg( 'dsb_account_notice', 'suspended', $this->get_dsb_page_url( 'dsb_login_page', 'login' ) ) );
+			exit;
+		}
+
+		if ( 'delete' === $action ) {
+			require_once ABSPATH . 'wp-admin/includes/user.php';
+			wp_logout();
+			wp_delete_user( $user_id );
+			wp_safe_redirect( $this->get_dsb_page_url( 'dsb_login_page', 'login' ) );
+			exit;
+		}
+
+		wp_safe_redirect( add_query_arg( 'dsb_account_notice', 'error', $this->get_dsb_page_url( 'dsb_profile_view_page', 'profile' ) ) );
+		exit;
 	}
 
 	/**
@@ -2861,6 +2943,16 @@ class DSB_Frontend {
 
 		if ( is_wp_error( $user ) ) {
 			wp_send_json_error( array( 'message' => __( 'Invalid username or password.', 'dating-site-builder' ) ) );
+		}
+
+		if ( get_user_meta( $user->ID, 'dsb_suspended', true ) ) {
+			wp_logout();
+			wp_send_json_error( array( 'message' => __( 'Your account is suspended. Please contact support.', 'dating-site-builder' ) ) );
+		}
+
+		if ( get_user_meta( $user->ID, 'dsb_banned', true ) ) {
+			wp_logout();
+			wp_send_json_error( array( 'message' => __( 'Your account has been blocked. Please contact support.', 'dating-site-builder' ) ) );
 		}
 
 		$redirect_url = $this->get_dsb_page_url( 'dsb_member_directory_page', 'members' );

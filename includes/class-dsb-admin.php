@@ -1416,6 +1416,42 @@ class DSB_Admin {
 	 * Render members page.
 	 */
 	public function render_members() {
+		// Handle single-row actions
+		if ( isset( $_GET['action'], $_GET['user_id'] ) && in_array( $_GET['action'], array( 'approve', 'suspend', 'unsuspend', 'ban', 'unban', 'delete' ), true ) ) {
+			check_admin_referer( 'dsb_member_action' );
+
+			$action = sanitize_key( wp_unslash( $_GET['action'] ) );
+			$user_id = intval( $_GET['user_id'] );
+
+			if ( $user_id > 0 ) {
+				switch ( $action ) {
+					case 'approve':
+						update_user_meta( $user_id, 'dsb_profile_approved', '1' );
+						break;
+					case 'suspend':
+						update_user_meta( $user_id, 'dsb_suspended', '1' );
+						break;
+					case 'unsuspend':
+						delete_user_meta( $user_id, 'dsb_suspended' );
+						break;
+					case 'ban':
+						update_user_meta( $user_id, 'dsb_banned', '1' );
+						break;
+					case 'unban':
+						delete_user_meta( $user_id, 'dsb_banned' );
+						break;
+					case 'delete':
+						require_once ABSPATH . 'wp-admin/includes/user.php';
+						wp_delete_user( $user_id );
+						break;
+				}
+			}
+
+			$redirect_url = remove_query_arg( array( 'action', 'user_id', '_wpnonce' ) );
+			wp_safe_redirect( add_query_arg( 'dsb_notice', 'member-updated', $redirect_url ) );
+			exit;
+		}
+
 		// Handle bulk actions
 		if ( isset( $_POST['dsb_bulk_action'] ) && isset( $_POST['member_ids'] ) ) {
 			check_admin_referer( 'dsb_members_bulk', 'dsb_members_nonce' );
@@ -1439,9 +1475,17 @@ class DSB_Admin {
 					case 'unban':
 						delete_user_meta( $user_id, 'dsb_banned' );
 						break;
+					case 'delete':
+						require_once ABSPATH . 'wp-admin/includes/user.php';
+						wp_delete_user( $user_id );
+						break;
 				}
 			}
 			echo '<div class="notice notice-success"><p>' . esc_html__( 'Members updated successfully.', 'dating-site-builder' ) . '</p></div>';
+		}
+
+		if ( isset( $_GET['dsb_notice'] ) && 'member-updated' === sanitize_key( wp_unslash( $_GET['dsb_notice'] ) ) ) {
+			echo '<div class="notice notice-success"><p>' . esc_html__( 'Member updated successfully.', 'dating-site-builder' ) . '</p></div>';
 		}
 
 		// Get filter
@@ -1569,6 +1613,7 @@ class DSB_Admin {
 							<option value="unsuspend"><?php esc_html_e( 'Unsuspend', 'dating-site-builder' ); ?></option>
 							<option value="ban"><?php esc_html_e( 'Ban', 'dating-site-builder' ); ?></option>
 							<option value="unban"><?php esc_html_e( 'Unban', 'dating-site-builder' ); ?></option>
+							<option value="delete"><?php esc_html_e( 'Delete Account', 'dating-site-builder' ); ?></option>
 						</select>
 						<input type="submit" class="button action" value="<?php esc_attr_e( 'Apply', 'dating-site-builder' ); ?>">
 					</div>
@@ -1632,9 +1677,20 @@ class DSB_Admin {
 									</td>
 									<td>
 										<a href="<?php echo esc_url( admin_url( 'user-edit.php?user_id=' . $member->ID ) ); ?>" class="button button-small"><?php esc_html_e( 'Edit', 'dating-site-builder' ); ?></a>
+										<?php if ( $is_suspended ) : ?>
+											<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=dsb-members&action=unsuspend&user_id=' . $member->ID ), 'dsb_member_action' ) ); ?>" class="button button-small"><?php esc_html_e( 'Unsuspend', 'dating-site-builder' ); ?></a>
+										<?php else : ?>
+											<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=dsb-members&action=suspend&user_id=' . $member->ID ), 'dsb_member_action' ) ); ?>" class="button button-small"><?php esc_html_e( 'Suspend', 'dating-site-builder' ); ?></a>
+										<?php endif; ?>
+										<?php if ( $is_banned ) : ?>
+											<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=dsb-members&action=unban&user_id=' . $member->ID ), 'dsb_member_action' ) ); ?>" class="button button-small"><?php esc_html_e( 'Unban', 'dating-site-builder' ); ?></a>
+										<?php else : ?>
+											<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=dsb-members&action=ban&user_id=' . $member->ID ), 'dsb_member_action' ) ); ?>" class="button button-small" style="color:#dc3545;"><?php esc_html_e( 'Ban', 'dating-site-builder' ); ?></a>
+										<?php endif; ?>
 										<?php if ( ! $is_approved ) : ?>
 											<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=dsb-members&action=approve&user_id=' . $member->ID ), 'dsb_member_action' ) ); ?>" class="button button-small button-primary"><?php esc_html_e( 'Approve', 'dating-site-builder' ); ?></a>
 										<?php endif; ?>
+										<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=dsb-members&action=delete&user_id=' . $member->ID ), 'dsb_member_action' ) ); ?>" class="button button-small" style="color:#b91c1c;" onclick="return confirm('<?php echo esc_js( __( 'Delete this account permanently?', 'dating-site-builder' ) ); ?>');"><?php esc_html_e( 'Delete', 'dating-site-builder' ); ?></a>
 									</td>
 								</tr>
 							<?php endforeach; ?>

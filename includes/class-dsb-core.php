@@ -116,6 +116,7 @@ class DSB_Core {
 
 		// Register shortcodes
 		$this->loader->add_action( 'init', $plugin_public, 'register_shortcodes' );
+		$this->loader->add_action( 'admin_post_dsb_account_action', $plugin_public, 'handle_account_action' );
 		
 		// AJAX handlers for public
 		$this->loader->add_action( 'wp_ajax_dsb_register_user', $plugin_public, 'ajax_register_user' );
