@@ -20,6 +20,7 @@ $tables = array(
 	$wpdb->prefix . 'dsb_reports',
 	$wpdb->prefix . 'dsb_profile_views',
 	$wpdb->prefix . 'dsb_photo_access',
+	$wpdb->prefix . 'dsb_account_actions',
 );
 
 foreach ( $tables as $table ) {
@@ -38,6 +39,8 @@ $options = array(
 	'dsb_allow_multiple_interests',
 	'dsb_photo_privacy_mode',
 	'dsb_enable_private_photos',
+	'dsb_suspend_reason_options',
+	'dsb_cancel_reason_options',
 	'dsb_age_gate_enabled',
 	'dsb_matching_mode',
 	'dsb_require_mutual_like',
@@ -49,6 +52,7 @@ $options = array(
 	'dsb_matches_page',
 	'dsb_messages_page',
 	'dsb_likes_page',
+	'dsb_account_cancellation_log',
 	'dsb_wizard_completed',
 );
 

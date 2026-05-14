@@ -62,6 +62,7 @@ class DSB_Core {
 		$this->loader->add_action( 'wp_ajax_dsb_approve_profile', $plugin_admin, 'approve_profile' );
 		$this->loader->add_action( 'wp_ajax_dsb_ban_user', $plugin_admin, 'ban_user' );
 		$this->loader->add_action( 'wp_ajax_dsb_resolve_report', $plugin_admin, 'resolve_report' );
+		$this->loader->add_action( 'admin_post_dsb_admin_account_action', $plugin_admin, 'handle_admin_account_action' );
 
 		// Manage dating profile photos from the standard WP user screens.
 		// Priority 0 renders the photo section above the default WP

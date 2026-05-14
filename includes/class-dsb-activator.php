@@ -58,6 +58,11 @@ class DSB_Activator {
 			update_option( 'dsb_db_version', '1.5' );
 		}
 
+		if ( version_compare( $current, '1.6', '<' ) ) {
+			self::migrate_create_account_actions_table();
+			update_option( 'dsb_db_version', '1.6' );
+		}
+
 		// Self-heal sweep: re-approve any dating member that is
 		// somehow missing the approval flag. Throttled to once per
 		// hour to keep front-end requests cheap.
@@ -333,6 +338,33 @@ class DSB_Activator {
 	}
 
 	/**
+	 * Migration: create the dsb_account_actions table for suspend and
+	 * cancellation history.
+	 */
+	private static function migrate_create_account_actions_table() {
+		global $wpdb;
+		$charset_collate = $wpdb->get_charset_collate();
+		$table = $wpdb->prefix . 'dsb_account_actions';
+		$sql = "CREATE TABLE IF NOT EXISTS $table (
+			id bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+			user_id bigint(20) UNSIGNED NOT NULL,
+			action_type varchar(20) NOT NULL,
+			reason_key varchar(191) DEFAULT NULL,
+			reason_label varchar(255) DEFAULT NULL,
+			reason_note text DEFAULT NULL,
+			source varchar(20) NOT NULL DEFAULT 'member',
+			performed_by bigint(20) UNSIGNED DEFAULT NULL,
+			created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY (id),
+			KEY user_id (user_id),
+			KEY action_type (action_type),
+			KEY source (source)
+		) $charset_collate;";
+		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+		dbDelta( $sql );
+	}
+
+	/**
 	 * Migration: make Edit Profile, Forgot Password and Likes &
 	 * Favorites children of the My Profile page so the theme's page
 	 * menu collapses them into a submenu.
@@ -477,6 +509,24 @@ class DSB_Activator {
 			KEY status (status)
 		) $charset_collate;";
 
+		// Account actions audit table
+		$table_account_actions = $wpdb->prefix . 'dsb_account_actions';
+		$sql_account_actions = "CREATE TABLE IF NOT EXISTS $table_account_actions (
+			id bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+			user_id bigint(20) UNSIGNED NOT NULL,
+			action_type varchar(20) NOT NULL,
+			reason_key varchar(191) DEFAULT NULL,
+			reason_label varchar(255) DEFAULT NULL,
+			reason_note text DEFAULT NULL,
+			source varchar(20) NOT NULL DEFAULT 'member',
+			performed_by bigint(20) UNSIGNED DEFAULT NULL,
+			created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY (id),
+			KEY user_id (user_id),
+			KEY action_type (action_type),
+			KEY source (source)
+		) $charset_collate;";
+
 		require_once( ABSPATH . 'wp-admin/includes/upgrade.php' );
 		dbDelta( $sql_messages );
 		dbDelta( $sql_likes );
@@ -485,6 +535,7 @@ class DSB_Activator {
 		dbDelta( $sql_views );
 		dbDelta( $sql_group_chat );
 		dbDelta( $sql_photo_access );
+		dbDelta( $sql_account_actions );
 
 		// Store database version - only seed on fresh installs so
 		// reactivating the plugin does not roll already-applied

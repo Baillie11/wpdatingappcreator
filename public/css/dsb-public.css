@@ -997,6 +997,27 @@
 	gap: 0.75rem;
 }
 
+.dsb-account-action-form {
+	display: grid;
+	gap: 0.7rem;
+	max-width: 640px;
+	margin-top: 0.5rem;
+}
+
+.dsb-account-reason-group {
+	display: grid;
+	gap: 0.35rem;
+}
+
+.dsb-account-action-select,
+.dsb-account-reason-field {
+	max-width: 100%;
+}
+
+.dsb-account-action-submit {
+	justify-self: start;
+}
+
 .dsb-account-reason-label {
 	font-size: 0.78rem;
 	color: var(--dsb-text-secondary);

@@ -95,6 +95,146 @@ class DSB_Profile_Fields {
 	}
 
 	/**
+	 * Get editable account reason options as grouped dropdown data.
+	 *
+	 * Each line in the stored option can be written as:
+	 *   Group label | Reason label
+	 *
+	 * @param string $action Account action type: suspend or delete.
+	 * @return array<string, array<string, string>>
+	 */
+	public static function get_account_reason_groups( $action = 'suspend' ) {
+		$option_name = 'suspend' === $action ? 'dsb_suspend_reason_options' : 'dsb_cancel_reason_options';
+		$defaults    = self::get_default_account_reason_lines( $action );
+		$raw_value   = (string) get_option( $option_name, '' );
+		$lines       = array();
+
+		if ( '' !== trim( $raw_value ) ) {
+			$lines = preg_split( '/\r\n|\r|\n/', $raw_value );
+		}
+
+		if ( empty( $lines ) ) {
+			$lines = $defaults;
+		}
+
+		$groups = array();
+		$seen   = array();
+
+		foreach ( $lines as $line ) {
+			$line = trim( (string) $line );
+			if ( '' === $line ) {
+				continue;
+			}
+
+			$group_label = __( 'General', 'dating-site-builder' );
+			$reason_label = $line;
+
+			if ( false !== strpos( $line, '|' ) ) {
+				$parts        = array_map( 'trim', explode( '|', $line, 2 ) );
+				$group_label  = ! empty( $parts[0] ) ? $parts[0] : $group_label;
+				$reason_label = ! empty( $parts[1] ) ? $parts[1] : $reason_label;
+			}
+
+			$group_key  = sanitize_title( $group_label );
+			$reason_key = sanitize_title( $reason_label );
+			if ( '' === $reason_key ) {
+				continue;
+			}
+
+			$unique_key = $reason_key;
+			$counter    = 2;
+			while ( isset( $seen[ $group_key . '|' . $unique_key ] ) ) {
+				$unique_key = $reason_key . '-' . $counter;
+				$counter++;
+			}
+			$seen[ $group_key . '|' . $unique_key ] = true;
+
+			if ( ! isset( $groups[ $group_label ] ) ) {
+				$groups[ $group_label ] = array();
+			}
+			$groups[ $group_label ][ $unique_key ] = $reason_label;
+		}
+
+		return $groups;
+	}
+
+	/**
+	 * Get the default editable account reason lines.
+	 *
+	 * @param string $action Account action type.
+	 * @return array<int, string>
+	 */
+	public static function get_default_account_reason_lines( $action = 'suspend' ) {
+		if ( 'delete' === $action ) {
+			return array(
+				__( 'General / Lifestyle | Taking a break from dating', 'dating-site-builder' ),
+				__( 'General / Lifestyle | I met someone', 'dating-site-builder' ),
+				__( 'General / Lifestyle | Too busy right now', 'dating-site-builder' ),
+				__( 'General / Lifestyle | Travelling or moving', 'dating-site-builder' ),
+				__( 'General / Lifestyle | Personal reasons', 'dating-site-builder' ),
+				__( 'General / Lifestyle | Just exploring / curious only', 'dating-site-builder' ),
+				__( 'Site Experience | Not enough active members in my area', 'dating-site-builder' ),
+				__( 'Site Experience | Not getting enough matches', 'dating-site-builder' ),
+				__( 'Site Experience | Conversations were not leading anywhere', 'dating-site-builder' ),
+				__( 'Site Experience | Too many fake or inactive profiles', 'dating-site-builder' ),
+				__( 'Site Experience | Did not find the type of people I was looking for', 'dating-site-builder' ),
+				__( 'Site Experience | The site feels too quiet', 'dating-site-builder' ),
+				__( 'Site Experience | Not enough events or activities', 'dating-site-builder' ),
+				__( 'Features / Technical | Difficult to use', 'dating-site-builder' ),
+				__( 'Features / Technical | Missing features I expected', 'dating-site-builder' ),
+				__( 'Features / Technical | Mobile experience needs improvement', 'dating-site-builder' ),
+				__( 'Features / Technical | Technical issues or bugs', 'dating-site-builder' ),
+				__( 'Features / Technical | Notifications/messages not working well', 'dating-site-builder' ),
+				__( 'Pricing / Membership | Membership is too expensive', 'dating-site-builder' ),
+				__( 'Pricing / Membership | I do not use it enough to justify paying', 'dating-site-builder' ),
+				__( 'Pricing / Membership | Prefer free platforms', 'dating-site-builder' ),
+				__( 'Safety / Comfort | Privacy concerns', 'dating-site-builder' ),
+				__( 'Safety / Comfort | Safety concerns', 'dating-site-builder' ),
+				__( 'Safety / Comfort | Received unwanted messages or behaviour', 'dating-site-builder' ),
+				__( 'Safety / Comfort | Moderation concerns', 'dating-site-builder' ),
+				__( 'Competitor / Comparison | Using another dating platform instead', 'dating-site-builder' ),
+				__( 'Competitor / Comparison | Returning to another community/site', 'dating-site-builder' ),
+				__( 'Final Catch-All | Other (please tell us more)', 'dating-site-builder' ),
+			);
+		}
+
+		return array(
+			__( 'General / Lifestyle | Taking a break from dating', 'dating-site-builder' ),
+			__( 'General / Lifestyle | I met someone', 'dating-site-builder' ),
+			__( 'General / Lifestyle | Too busy right now', 'dating-site-builder' ),
+			__( 'General / Lifestyle | Travelling or moving', 'dating-site-builder' ),
+			__( 'General / Lifestyle | Personal reasons', 'dating-site-builder' ),
+			__( 'General / Lifestyle | Just exploring / curious only', 'dating-site-builder' ),
+			__( 'Site Experience | Not enough active members in my area', 'dating-site-builder' ),
+			__( 'Site Experience | Not getting enough matches', 'dating-site-builder' ),
+			__( 'Site Experience | Conversations were not leading anywhere', 'dating-site-builder' ),
+			__( 'Site Experience | Too many fake or inactive profiles', 'dating-site-builder' ),
+			__( 'Site Experience | Did not find the type of people I was looking for', 'dating-site-builder' ),
+			__( 'Site Experience | The site feels too quiet', 'dating-site-builder' ),
+			__( 'Site Experience | Not enough events or activities', 'dating-site-builder' ),
+			__( 'Features / Technical | Difficult to use', 'dating-site-builder' ),
+			__( 'Features / Technical | Missing features I expected', 'dating-site-builder' ),
+			__( 'Features / Technical | Mobile experience needs improvement', 'dating-site-builder' ),
+			__( 'Features / Technical | Technical issues or bugs', 'dating-site-builder' ),
+			__( 'Features / Technical | Notifications/messages not working well', 'dating-site-builder' ),
+			__( 'Pricing / Membership | Membership is too expensive', 'dating-site-builder' ),
+			__( 'Pricing / Membership | I do not use it enough to justify paying', 'dating-site-builder' ),
+			__( 'Pricing / Membership | Prefer free platforms', 'dating-site-builder' ),
+			__( 'Safety / Comfort | Privacy concerns', 'dating-site-builder' ),
+			__( 'Safety / Comfort | Safety concerns', 'dating-site-builder' ),
+			__( 'Safety / Comfort | Received unwanted messages or behaviour', 'dating-site-builder' ),
+			__( 'Safety / Comfort | Moderation concerns', 'dating-site-builder' ),
+			__( 'Competitor / Comparison | Using another dating platform instead', 'dating-site-builder' ),
+			__( 'Competitor / Comparison | Returning to another community/site', 'dating-site-builder' ),
+			__( 'Temporary Pause Options | Need some time away', 'dating-site-builder' ),
+			__( 'Temporary Pause Options | Want to hide my profile temporarily', 'dating-site-builder' ),
+			__( 'Temporary Pause Options | Will return later', 'dating-site-builder' ),
+			__( 'Temporary Pause Options | Pausing while in a relationship', 'dating-site-builder' ),
+			__( 'Final Catch-All | Other (please tell us more)', 'dating-site-builder' ),
+		);
+	}
+
+	/**
 	 * Basic profile fields.
 	 */
 	private static function get_basic_fields() {
