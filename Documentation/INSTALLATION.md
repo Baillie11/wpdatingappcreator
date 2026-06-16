@@ -197,9 +197,16 @@ To completely remove the plugin:
 
 1. Deactivate the plugin from WordPress admin
 2. Delete the plugin files
-3. The `uninstall.php` script will automatically:
+3. On non-production environments, the `uninstall.php` script will
+   automatically:
    - Drop all custom database tables
    - Remove all plugin options
    - Clean up user metadata
 
-**Note:** Uninstalling will delete all dating profiles, messages, and likes permanently!
+**Production safety:** On production/live-looking environments, destructive
+uninstall cleanup is blocked unless `DSB_ALLOW_PRODUCTION_DATA_DELETION` is
+explicitly set to `true` in `wp-config.php`. Take a verified database backup
+before enabling that constant.
+
+**Note:** Uninstalling with destructive cleanup enabled will delete all dating
+profiles, messages, and likes permanently!

@@ -79,6 +79,9 @@ class DSB_Admin {
 		register_setting( 'dsb_settings', 'dsb_site_type' );
 		register_setting( 'dsb_settings', 'dsb_minimum_age' );
 		register_setting( 'dsb_settings', 'dsb_require_email_verification' );
+		register_setting( 'dsb_settings', 'dsb_mail_from_name' );
+		register_setting( 'dsb_settings', 'dsb_mail_from_email' );
+		register_setting( 'dsb_settings', 'dsb_mail_reply_to_email' );
 		register_setting( 'dsb_settings', 'dsb_require_profile_approval' );
 		register_setting( 'dsb_settings', 'dsb_enabled_field_groups' );
 		register_setting( 'dsb_settings', 'dsb_allow_custom_gender' );
@@ -1418,6 +1421,85 @@ class DSB_Admin {
 	 * Render members page.
 	 */
 	public function render_members() {
+		if ( isset( $_POST['dsb_member_email_scope'], $_POST['dsb_member_email_subject'], $_POST['dsb_member_email_message'] ) ) {
+			check_admin_referer( 'dsb_member_email', 'dsb_member_email_nonce' );
+
+			$scope   = sanitize_key( wp_unslash( $_POST['dsb_member_email_scope'] ) );
+			$subject = sanitize_text_field( wp_unslash( $_POST['dsb_member_email_subject'] ) );
+			$message = sanitize_textarea_field( wp_unslash( $_POST['dsb_member_email_message'] ) );
+			$sent_count   = 0;
+			$failed_count = 0;
+			$recipients   = array();
+
+			if ( 'single' === $scope && ! empty( $_POST['dsb_member_email_user_id'] ) ) {
+				$recipient = get_userdata( intval( $_POST['dsb_member_email_user_id'] ) );
+				if ( $recipient && ! empty( $recipient->user_email ) ) {
+					$recipients[] = $recipient;
+				}
+			} elseif ( 'all' === $scope ) {
+				$email_filter = isset( $_POST['dsb_member_email_filter'] ) ? sanitize_text_field( wp_unslash( $_POST['dsb_member_email_filter'] ) ) : 'all';
+				$email_search = isset( $_POST['dsb_member_email_search'] ) ? sanitize_text_field( wp_unslash( $_POST['dsb_member_email_search'] ) ) : '';
+				$email_args = array(
+					'role__in' => array( 'dating_member', 'dating_premium' ),
+					'fields'   => array( 'ID', 'display_name', 'user_email' ),
+					'number'   => -1,
+				);
+
+				if ( $email_search ) {
+					$email_args['search']         = '*' . $email_search . '*';
+					$email_args['search_columns'] = array( 'user_login', 'user_email', 'display_name' );
+				}
+
+				if ( 'pending' === $email_filter ) {
+					$email_args['meta_query'] = array(
+						array(
+							'key'     => 'dsb_profile_approved',
+							'compare' => 'NOT EXISTS',
+						),
+					);
+				} elseif ( 'suspended' === $email_filter ) {
+					$email_args['meta_key']   = 'dsb_suspended';
+					$email_args['meta_value'] = '1';
+				} elseif ( 'banned' === $email_filter ) {
+					$email_args['meta_key']   = 'dsb_banned';
+					$email_args['meta_value'] = '1';
+				}
+
+				$recipients = get_users( $email_args );
+			}
+
+			if ( '' !== $subject && '' !== $message && ! empty( $recipients ) ) {
+				$unique_emails = array();
+				foreach ( $recipients as $recipient ) {
+					$recipient_email = sanitize_email( $recipient->user_email );
+					if ( '' === $recipient_email || isset( $unique_emails[ strtolower( $recipient_email ) ] ) ) {
+						continue;
+					}
+
+					$unique_emails[ strtolower( $recipient_email ) ] = true;
+					if ( $this->send_member_admin_email( $recipient_email, $subject, $message ) ) {
+						$sent_count++;
+					} else {
+						$failed_count++;
+					}
+				}
+			}
+
+			$redirect_args = array(
+				'dsb_notice'       => $sent_count > 0 ? 'email-sent' : 'email-failed',
+				'dsb_email_sent'   => $sent_count,
+				'dsb_email_failed' => $failed_count,
+			);
+
+			if ( 0 === $sent_count && ( '' === $subject || '' === $message || empty( $recipients ) ) ) {
+				$redirect_args['dsb_notice'] = 'email-invalid';
+			}
+
+			$redirect_url = remove_query_arg( array( 'email_user', 'dsb_notice', 'dsb_email_sent', 'dsb_email_failed' ) );
+			wp_safe_redirect( add_query_arg( $redirect_args, $redirect_url ) );
+			exit;
+		}
+
 		// Handle single-row POST actions with reason fields.
 		if ( isset( $_POST['dsb_single_action'], $_POST['user_id'] ) ) {
 			$user_id = intval( $_POST['user_id'] );
@@ -1531,6 +1613,14 @@ class DSB_Admin {
 
 		if ( isset( $_GET['dsb_notice'] ) && 'member-updated' === sanitize_key( wp_unslash( $_GET['dsb_notice'] ) ) ) {
 			echo '<div class="notice notice-success"><p>' . esc_html__( 'Member updated successfully.', 'dating-site-builder' ) . '</p></div>';
+		} elseif ( isset( $_GET['dsb_notice'] ) && 'email-sent' === sanitize_key( wp_unslash( $_GET['dsb_notice'] ) ) ) {
+			$sent_count   = isset( $_GET['dsb_email_sent'] ) ? intval( $_GET['dsb_email_sent'] ) : 0;
+			$failed_count = isset( $_GET['dsb_email_failed'] ) ? intval( $_GET['dsb_email_failed'] ) : 0;
+			echo '<div class="notice notice-success"><p>' . sprintf( esc_html__( 'Email sent to %1$d member(s). %2$d failed.', 'dating-site-builder' ), $sent_count, $failed_count ) . '</p></div>';
+		} elseif ( isset( $_GET['dsb_notice'] ) && 'email-invalid' === sanitize_key( wp_unslash( $_GET['dsb_notice'] ) ) ) {
+			echo '<div class="notice notice-error"><p>' . esc_html__( 'Please provide a subject, a message, and at least one valid recipient.', 'dating-site-builder' ) . '</p></div>';
+		} elseif ( isset( $_GET['dsb_notice'] ) && 'email-failed' === sanitize_key( wp_unslash( $_GET['dsb_notice'] ) ) ) {
+			echo '<div class="notice notice-error"><p>' . esc_html__( 'Unable to send the email. Please review your mail settings and try again.', 'dating-site-builder' ) . '</p></div>';
 		}
 
 		// Get filter
@@ -1674,10 +1764,86 @@ class DSB_Admin {
 				'current' => 'banned' === $filter,
 			),
 		);
+		$email_user_id = isset( $_GET['email_user'] ) ? intval( $_GET['email_user'] ) : 0;
+		$email_member  = $email_user_id > 0 ? get_userdata( $email_user_id ) : false;
 		?>
 		<div class="wrap">
 			<h1><?php esc_html_e( 'Manage Members', 'dating-site-builder' ); ?></h1>
 			<?php $this->render_admin_filter_cards( $member_filter_cards ); ?>
+
+			<?php if ( current_user_can( 'manage_dating_site' ) ) : ?>
+				<div class="postbox" style="max-width: 960px; margin-top: 16px;">
+					<div class="postbox-header"><h2><?php esc_html_e( 'Member Backup', 'dating-site-builder' ); ?></h2></div>
+					<div class="inside">
+						<p><?php esc_html_e( 'Download a JSON backup of all member accounts, their user meta, and the plugin activity tables before pushing staging changes to live. This export does not include uploaded media files.', 'dating-site-builder' ); ?></p>
+						<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+							<input type="hidden" name="action" value="dsb_download_member_backup">
+							<?php wp_nonce_field( 'dsb_download_member_backup', 'dsb_member_backup_nonce' ); ?>
+							<p><button type="submit" class="button button-secondary"><?php esc_html_e( 'Download Member Backup', 'dating-site-builder' ); ?></button></p>
+						</form>
+					</div>
+				</div>
+			<?php endif; ?>
+
+			<div class="postbox" style="max-width: 960px; margin-top: 16px;">
+				<div class="postbox-header"><h2><?php esc_html_e( 'Email Members', 'dating-site-builder' ); ?></h2></div>
+				<div class="inside">
+					<p><?php esc_html_e( 'Send an email to every member in the current list view. Your current filter and search are respected.', 'dating-site-builder' ); ?></p>
+					<form method="post">
+						<?php wp_nonce_field( 'dsb_member_email', 'dsb_member_email_nonce' ); ?>
+						<input type="hidden" name="dsb_member_email_scope" value="all">
+						<input type="hidden" name="dsb_member_email_filter" value="<?php echo esc_attr( $filter ); ?>">
+						<input type="hidden" name="dsb_member_email_search" value="<?php echo esc_attr( $search ); ?>">
+						<table class="form-table" role="presentation">
+							<tr>
+								<th scope="row"><label for="dsb-member-email-all-subject"><?php esc_html_e( 'Subject', 'dating-site-builder' ); ?></label></th>
+								<td><input type="text" id="dsb-member-email-all-subject" name="dsb_member_email_subject" class="regular-text" required></td>
+							</tr>
+							<tr>
+								<th scope="row"><label for="dsb-member-email-all-message"><?php esc_html_e( 'Message', 'dating-site-builder' ); ?></label></th>
+								<td><textarea id="dsb-member-email-all-message" name="dsb_member_email_message" class="large-text" rows="6" required></textarea></td>
+							</tr>
+						</table>
+						<p><button type="submit" class="button button-primary"><?php esc_html_e( 'Send Email To This Member List', 'dating-site-builder' ); ?></button></p>
+					</form>
+				</div>
+			</div>
+
+			<?php if ( $email_member && ! empty( $email_member->user_email ) ) : ?>
+				<div class="postbox" style="max-width: 960px; margin-top: 16px;">
+					<div class="postbox-header"><h2><?php esc_html_e( 'Email Individual Member', 'dating-site-builder' ); ?></h2></div>
+					<div class="inside">
+						<p>
+							<?php
+							printf(
+								esc_html__( 'You are emailing %1$s at %2$s.', 'dating-site-builder' ),
+								esc_html( $email_member->display_name ),
+								esc_html( $email_member->user_email )
+							);
+							?>
+						</p>
+						<form method="post">
+							<?php wp_nonce_field( 'dsb_member_email', 'dsb_member_email_nonce' ); ?>
+							<input type="hidden" name="dsb_member_email_scope" value="single">
+							<input type="hidden" name="dsb_member_email_user_id" value="<?php echo esc_attr( $email_member->ID ); ?>">
+							<table class="form-table" role="presentation">
+								<tr>
+									<th scope="row"><label for="dsb-member-email-single-subject"><?php esc_html_e( 'Subject', 'dating-site-builder' ); ?></label></th>
+									<td><input type="text" id="dsb-member-email-single-subject" name="dsb_member_email_subject" class="regular-text" required></td>
+								</tr>
+								<tr>
+									<th scope="row"><label for="dsb-member-email-single-message"><?php esc_html_e( 'Message', 'dating-site-builder' ); ?></label></th>
+									<td><textarea id="dsb-member-email-single-message" name="dsb_member_email_message" class="large-text" rows="6" required></textarea></td>
+								</tr>
+							</table>
+							<p>
+								<button type="submit" class="button button-primary"><?php esc_html_e( 'Send Email To Member', 'dating-site-builder' ); ?></button>
+								<a href="<?php echo esc_url( remove_query_arg( 'email_user' ) ); ?>" class="button"><?php esc_html_e( 'Cancel', 'dating-site-builder' ); ?></a>
+							</p>
+						</form>
+					</div>
+				</div>
+			<?php endif; ?>
 
 			<form method="get" class="search-form dsb-members-search-form">
 				<input type="hidden" name="page" value="dsb-members">
@@ -1764,6 +1930,7 @@ class DSB_Admin {
 									</td>
 									<td>
 										<a href="<?php echo esc_url( admin_url( 'user-edit.php?user_id=' . $member->ID ) ); ?>" class="button button-small"><?php esc_html_e( 'Edit', 'dating-site-builder' ); ?></a>
+										<a href="<?php echo esc_url( add_query_arg( 'email_user', $member->ID ) ); ?>" class="button button-small"><?php esc_html_e( 'Email', 'dating-site-builder' ); ?></a>
 										<?php if ( $is_banned ) : ?>
 											<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=dsb-members&action=unban&user_id=' . $member->ID ), 'dsb_member_action' ) ); ?>" class="button button-small"><?php esc_html_e( 'Unban', 'dating-site-builder' ); ?></a>
 										<?php else : ?>
@@ -1811,6 +1978,50 @@ class DSB_Admin {
 	}
 
 	/**
+	 * Render an uploader dropdown on the Media Library list screen.
+	 */
+	public function render_media_uploader_filter() {
+		global $typenow, $pagenow;
+
+		if ( 'upload.php' !== $pagenow || 'attachment' !== $typenow ) {
+			return;
+		}
+
+		$selected_author = isset( $_GET['dsb_attachment_author'] ) ? intval( $_GET['dsb_attachment_author'] ) : 0;
+		wp_dropdown_users(
+			array(
+				'name'              => 'dsb_attachment_author',
+				'show_option_all'   => __( 'All Uploaders', 'dating-site-builder' ),
+				'selected'          => $selected_author,
+				'include_selected'  => true,
+				'option_none_value' => 0,
+			)
+		);
+	}
+
+	/**
+	 * Filter Media Library attachments by uploader when requested.
+	 *
+	 * @param WP_Query $query Media Library query.
+	 */
+	public function filter_media_library_by_uploader( $query ) {
+		global $pagenow;
+
+		if ( ! is_admin() || ! $query->is_main_query() ) {
+			return;
+		}
+
+		if ( 'upload.php' !== $pagenow || 'attachment' !== $query->get( 'post_type' ) ) {
+			return;
+		}
+
+		$selected_author = isset( $_GET['dsb_attachment_author'] ) ? intval( $_GET['dsb_attachment_author'] ) : 0;
+		if ( $selected_author > 0 ) {
+			$query->set( 'author', $selected_author );
+		}
+	}
+
+	/**
 	 * Render a sortable members table header.
 	 *
 	 * @param string $label Column label.
@@ -1851,6 +2062,170 @@ class DSB_Admin {
 			</a>
 		</th>
 		<?php
+	}
+
+	/**
+	 * Send an email from the members admin screen.
+	 *
+	 * @param string $recipient Recipient email address.
+	 * @param string $subject Email subject.
+	 * @param string $message Email body.
+	 * @return bool
+	 */
+	private function send_member_admin_email( $recipient, $subject, $message ) {
+		$recipient = sanitize_email( $recipient );
+		if ( '' === $recipient || ! is_email( $recipient ) ) {
+			return false;
+		}
+
+		$from_name  = trim( (string) get_option( 'dsb_mail_from_name', wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES ) ) );
+		$from_email = sanitize_email( get_option( 'dsb_mail_from_email', get_option( 'admin_email' ) ) );
+		$reply_to   = sanitize_email( get_option( 'dsb_mail_reply_to_email', $from_email ) );
+		$headers    = array( 'Content-Type: text/plain; charset=UTF-8' );
+
+		if ( '' !== $from_email ) {
+			$headers[] = 'From: ' . ( '' !== $from_name ? $from_name : wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES ) ) . ' <' . $from_email . '>';
+		}
+
+		if ( '' !== $reply_to ) {
+			$headers[] = 'Reply-To: ' . $reply_to;
+		}
+
+		return wp_mail( $recipient, $subject, $message, $headers );
+	}
+
+	/**
+	 * Download a JSON backup of current member data.
+	 */
+	public function download_member_backup() {
+		if ( ! current_user_can( 'manage_dating_site' ) ) {
+			wp_die( esc_html__( 'You do not have permission to download member backups.', 'dating-site-builder' ) );
+		}
+
+		check_admin_referer( 'dsb_download_member_backup', 'dsb_member_backup_nonce' );
+
+		$backup = array(
+			'generated_at' => current_time( 'mysql' ),
+			'site_url'     => home_url(),
+			'members'      => $this->get_member_backup_users(),
+			'tables'       => $this->get_member_backup_tables(),
+		);
+
+		$host = wp_parse_url( home_url(), PHP_URL_HOST );
+		if ( ! is_string( $host ) || '' === $host ) {
+			$host = 'site';
+		}
+
+		$filename = sprintf(
+			'dsb-member-backup-%s-%s.json',
+			sanitize_file_name( $host ),
+			gmdate( 'Ymd-His' )
+		);
+
+		nocache_headers();
+		header( 'Content-Type: application/json; charset=' . get_option( 'blog_charset' ) );
+		header( 'Content-Disposition: attachment; filename=' . $filename );
+
+		while ( ob_get_level() ) {
+			ob_end_clean();
+		}
+
+		echo wp_json_encode( $backup, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES );
+		exit;
+	}
+
+	/**
+	 * Build the member account portion of a backup export.
+	 *
+	 * @return array<int, array<string, mixed>>
+	 */
+	private function get_member_backup_users() {
+		$members = get_users(
+			array(
+				'role__in' => array( 'dating_member', 'dating_premium' ),
+				'orderby'  => 'ID',
+				'order'    => 'ASC',
+			)
+		);
+
+		$export = array();
+		foreach ( $members as $member ) {
+			$export[] = array(
+				'ID'              => (int) $member->ID,
+				'user_login'      => $member->user_login,
+				'user_email'      => $member->user_email,
+				'display_name'    => $member->display_name,
+				'user_registered' => $member->user_registered,
+				'roles'           => array_values( (array) $member->roles ),
+				'meta'            => $this->normalize_backup_user_meta( get_user_meta( $member->ID ) ),
+			);
+		}
+
+		return $export;
+	}
+
+	/**
+	 * Normalize get_user_meta() output for JSON export.
+	 *
+	 * @param array<string, array<int, mixed>> $meta Raw meta array.
+	 * @return array<string, array<int, mixed>>
+	 */
+	private function normalize_backup_user_meta( $meta ) {
+		$normalized = array();
+
+		foreach ( $meta as $meta_key => $values ) {
+			$normalized_values = array();
+			foreach ( (array) $values as $value ) {
+				$normalized_values[] = maybe_unserialize( $value );
+			}
+
+			$normalized[ $meta_key ] = $normalized_values;
+		}
+
+		ksort( $normalized );
+
+		return $normalized;
+	}
+
+	/**
+	 * Export all plugin-owned member activity tables.
+	 *
+	 * @return array<string, array<int, array<string, mixed>>>
+	 */
+	private function get_member_backup_tables() {
+		global $wpdb;
+
+		$tables = array();
+		foreach ( $this->get_member_backup_table_names() as $key => $table_name ) {
+			if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table_name ) ) !== $table_name ) {
+				$tables[ $key ] = array();
+				continue;
+			}
+
+			$tables[ $key ] = $wpdb->get_results( "SELECT * FROM {$table_name}", ARRAY_A );
+		}
+
+		return $tables;
+	}
+
+	/**
+	 * Get the plugin tables that contain member activity and moderation data.
+	 *
+	 * @return array<string, string>
+	 */
+	private function get_member_backup_table_names() {
+		global $wpdb;
+
+		return array(
+			'messages'        => $wpdb->prefix . 'dsb_messages',
+			'likes'           => $wpdb->prefix . 'dsb_likes',
+			'blocks'          => $wpdb->prefix . 'dsb_blocks',
+			'reports'         => $wpdb->prefix . 'dsb_reports',
+			'profile_views'   => $wpdb->prefix . 'dsb_profile_views',
+			'group_chat'      => $wpdb->prefix . 'dsb_group_chat',
+			'photo_access'    => $wpdb->prefix . 'dsb_photo_access',
+			'account_actions' => $wpdb->prefix . 'dsb_account_actions',
+		);
 	}
 
 	/**
@@ -2107,10 +2482,21 @@ class DSB_Admin {
 			'dsb_header_logo_size'    => 'sanitize_text_field',
 			'dsb_suspend_reason_options' => 'sanitize_textarea_field',
 			'dsb_cancel_reason_options'  => 'sanitize_textarea_field',
+			'dsb_mail_from_name'         => 'sanitize_text_field',
 		);
 		foreach ( $text_options as $opt => $sanitizer ) {
 			if ( isset( $_POST[ $opt ] ) ) {
 				update_option( $opt, call_user_func( $sanitizer, wp_unslash( $_POST[ $opt ] ) ) );
+			}
+		}
+
+		$email_options = array(
+			'dsb_mail_from_email',
+			'dsb_mail_reply_to_email',
+		);
+		foreach ( $email_options as $opt ) {
+			if ( isset( $_POST[ $opt ] ) ) {
+				update_option( $opt, sanitize_email( wp_unslash( $_POST[ $opt ] ) ) );
 			}
 		}
 
@@ -2196,6 +2582,9 @@ class DSB_Admin {
 		$minimum_age            = get_option( 'dsb_minimum_age', 18 );
 		$default_country        = get_option( 'dsb_default_country', '' );
 		$require_email          = get_option( 'dsb_require_email_verification', false );
+		$mail_from_name         = get_option( 'dsb_mail_from_name', wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES ) );
+		$mail_from_email        = get_option( 'dsb_mail_from_email', get_option( 'admin_email' ) );
+		$mail_reply_to_email    = get_option( 'dsb_mail_reply_to_email', get_option( 'admin_email' ) );
 		$require_approval       = get_option( 'dsb_require_profile_approval', false );
 		$enabled_groups         = get_option( 'dsb_enabled_field_groups', array( 'basics', 'about', 'lifestyle' ) );
 		if ( ! is_array( $enabled_groups ) ) {
@@ -2346,6 +2735,25 @@ class DSB_Admin {
 									<?php esc_html_e( 'Require admin approval before profiles go public', 'dating-site-builder' ); ?>
 								</label>
 							</td>
+						</tr>
+					</table>
+				</div>
+
+				<div class="dsb-settings-section">
+					<h2><?php esc_html_e( 'Email Delivery', 'dating-site-builder' ); ?></h2>
+					<p class="description"><?php esc_html_e( 'These details are used for emails sent from the Members admin page. Leave them blank to fall back to the site name and WordPress admin email where possible.', 'dating-site-builder' ); ?></p>
+					<table class="form-table">
+						<tr>
+							<th scope="row"><label for="dsb_mail_from_name"><?php esc_html_e( 'From Name', 'dating-site-builder' ); ?></label></th>
+							<td><input type="text" name="dsb_mail_from_name" id="dsb_mail_from_name" value="<?php echo esc_attr( $mail_from_name ); ?>" class="regular-text"></td>
+						</tr>
+						<tr>
+							<th scope="row"><label for="dsb_mail_from_email"><?php esc_html_e( 'From Email', 'dating-site-builder' ); ?></label></th>
+							<td><input type="email" name="dsb_mail_from_email" id="dsb_mail_from_email" value="<?php echo esc_attr( $mail_from_email ); ?>" class="regular-text"></td>
+						</tr>
+						<tr>
+							<th scope="row"><label for="dsb_mail_reply_to_email"><?php esc_html_e( 'Reply-To Email', 'dating-site-builder' ); ?></label></th>
+							<td><input type="email" name="dsb_mail_reply_to_email" id="dsb_mail_reply_to_email" value="<?php echo esc_attr( $mail_reply_to_email ); ?>" class="regular-text"></td>
 						</tr>
 					</table>
 				</div>
@@ -3402,6 +3810,45 @@ class DSB_Admin {
 		);
 		wp_safe_redirect( $redirect_url );
 		exit;
+	}
+
+	/**
+	 * Send admins back to Manage Members after saving a user from user-edit.php.
+	 *
+	 * @param string $location Redirect destination.
+	 * @param int    $user_id Saved user ID.
+	 * @return string
+	 */
+	public function redirect_after_user_update( $location, $user_id ) {
+		if ( ! is_admin() ) {
+			return $location;
+		}
+
+		$screen_file = isset( $GLOBALS['pagenow'] ) ? $GLOBALS['pagenow'] : '';
+		if ( 'user-edit.php' !== $screen_file ) {
+			return $location;
+		}
+
+		if ( empty( $_POST['action'] ) || 'update' !== sanitize_key( wp_unslash( $_POST['action'] ) ) ) {
+			return $location;
+		}
+
+		$user = get_userdata( $user_id );
+		if ( ! $user ) {
+			return $location;
+		}
+
+		if ( ! array_intersect( array( 'dating_member', 'dating_premium' ), (array) $user->roles ) ) {
+			return $location;
+		}
+
+		return add_query_arg(
+			array(
+				'page'       => 'dsb-members',
+				'dsb_notice' => 'member-updated',
+			),
+			admin_url( 'admin.php' )
+		);
 	}
 
 	/**

@@ -12,6 +12,14 @@ if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
 
 global $wpdb;
 
+$environment_helper = __DIR__ . '/includes/class-dsb-environment.php';
+if ( file_exists( $environment_helper ) ) {
+	require_once $environment_helper;
+	DSB_Environment::assert_destructive_data_removal_allowed( 'plugin uninstall cleanup' );
+} elseif ( ! defined( 'DSB_ALLOW_PRODUCTION_DATA_DELETION' ) || true !== DSB_ALLOW_PRODUCTION_DATA_DELETION ) {
+	wp_die( esc_html__( 'Dating Site Builder blocked uninstall cleanup because the environment safety helper is missing. No dating data was deleted.', 'dating-site-builder' ) );
+}
+
 // Drop custom database tables
 $tables = array(
 	$wpdb->prefix . 'dsb_messages',

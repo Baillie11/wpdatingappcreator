@@ -23,7 +23,15 @@ change is shipped.
 
 ## [Unreleased]
 
-_No unreleased changes._
+### Added
+- Safe deployment/database workflow documentation for VentraIP staging-to-live
+  releases, including the rule that production data remains the source of
+  truth and only code files should be promoted during normal deployments.
+- `database-migrations/` with an additive initial baseline migration and
+  migration rules for production-safe schema updates.
+- Production-aware environment helper and uninstall guard that blocks
+  destructive plugin cleanup on production/live-looking databases unless an
+  explicit backup-era override constant is set.
 
 ---
 

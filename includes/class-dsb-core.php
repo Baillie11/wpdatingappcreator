@@ -63,6 +63,7 @@ class DSB_Core {
 		$this->loader->add_action( 'wp_ajax_dsb_ban_user', $plugin_admin, 'ban_user' );
 		$this->loader->add_action( 'wp_ajax_dsb_resolve_report', $plugin_admin, 'resolve_report' );
 		$this->loader->add_action( 'admin_post_dsb_admin_account_action', $plugin_admin, 'handle_admin_account_action' );
+		$this->loader->add_action( 'admin_post_dsb_download_member_backup', $plugin_admin, 'download_member_backup' );
 
 		// Manage dating profile photos from the standard WP user screens.
 		// Priority 0 renders the photo section above the default WP
@@ -78,11 +79,14 @@ class DSB_Core {
 		$this->loader->add_action( 'edit_user_profile', $plugin_admin, 'render_user_profile_fields' );
 		$this->loader->add_action( 'personal_options_update', $plugin_admin, 'save_user_profile_fields' );
 		$this->loader->add_action( 'edit_user_profile_update', $plugin_admin, 'save_user_profile_fields' );
+		$this->loader->add_filter( 'redirect_user_location', $plugin_admin, 'redirect_after_user_update', 10, 2 );
 
 		// Remove the built-in Website field to discourage off-site advertising.
 		$this->loader->add_action( 'admin_head-profile.php', $plugin_admin, 'hide_user_website_field' );
 		$this->loader->add_action( 'admin_head-user-edit.php', $plugin_admin, 'hide_user_website_field' );
 		$this->loader->add_action( 'admin_head-user-new.php', $plugin_admin, 'hide_user_website_field' );
+		$this->loader->add_action( 'restrict_manage_posts', $plugin_admin, 'render_media_uploader_filter' );
+		$this->loader->add_action( 'pre_get_posts', $plugin_admin, 'filter_media_library_by_uploader' );
 	}
 
 	/**
