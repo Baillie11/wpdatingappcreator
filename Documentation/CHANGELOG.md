@@ -24,6 +24,9 @@ change is shipped.
 ## [Unreleased]
 
 ### Added
+- Adult-site visual refresh with a darker compact member-area theme, tighter
+  stats/cards/navigation spacing, and clickable enlarged photo previews for
+  member cards and profile/gallery photos.
 - Safe deployment/database workflow documentation for VentraIP staging-to-live
   releases, including the rule that production data remains the source of
   truth and only code files should be promoted during normal deployments.

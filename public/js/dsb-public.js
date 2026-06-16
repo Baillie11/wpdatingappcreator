@@ -23,6 +23,7 @@
 			this.filters();
 			this.groupChat();
 			this.logoSpin();
+			this.photoLightbox();
 		},
 
 		/**
@@ -67,6 +68,66 @@
 				// Fallback in case the animationend event doesn't fire
 				// (e.g. element removed, prefers-reduced-motion).
 				setTimeout(go, 700);
+			});
+		},
+
+		/**
+		 * Enlarge profile/gallery photos in a lightweight modal.
+		 */
+		photoLightbox: function() {
+			function ensureLightbox() {
+				let $lightbox = $('#dsb-photo-lightbox');
+				if ($lightbox.length) {
+					return $lightbox;
+				}
+
+				$lightbox = $(
+					'<div id="dsb-photo-lightbox" class="dsb-photo-lightbox" aria-hidden="true">' +
+						'<div class="dsb-photo-lightbox-backdrop" data-dsb-lightbox-close="1"></div>' +
+						'<div class="dsb-photo-lightbox-dialog" role="dialog" aria-modal="true" aria-label="Profile photo preview">' +
+							'<button type="button" class="dsb-photo-lightbox-close" data-dsb-lightbox-close="1" aria-label="Close photo preview">&times;</button>' +
+							'<img class="dsb-photo-lightbox-img" src="" alt="">' +
+						'</div>' +
+					'</div>'
+				);
+				$('body').append($lightbox);
+				return $lightbox;
+			}
+
+			function closeLightbox() {
+				const $lightbox = $('#dsb-photo-lightbox');
+				$lightbox.removeClass('is-open').attr('aria-hidden', 'true');
+				$('body').removeClass('dsb-lightbox-open');
+				$lightbox.find('.dsb-photo-lightbox-img').attr('src', '').attr('alt', '');
+			}
+
+			$(document).on('click', '.dsb-photo-lightbox-trigger', function(e) {
+				e.preventDefault();
+				e.stopPropagation();
+
+				const $trigger = $(this);
+				const url = $trigger.data('photo-url');
+				if (!url) {
+					return;
+				}
+
+				const alt = $trigger.data('photo-alt') || 'Profile photo';
+				const $lightbox = ensureLightbox();
+				$lightbox.find('.dsb-photo-lightbox-img').attr('src', url).attr('alt', alt);
+				$lightbox.addClass('is-open').attr('aria-hidden', 'false');
+				$('body').addClass('dsb-lightbox-open');
+				$lightbox.find('.dsb-photo-lightbox-close').trigger('focus');
+			});
+
+			$(document).on('click', '[data-dsb-lightbox-close]', function(e) {
+				e.preventDefault();
+				closeLightbox();
+			});
+
+			$(document).on('keydown', function(e) {
+				if (e.key === 'Escape' && $('#dsb-photo-lightbox').hasClass('is-open')) {
+					closeLightbox();
+				}
 			});
 		},
 

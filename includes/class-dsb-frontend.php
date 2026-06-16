@@ -2824,6 +2824,15 @@ class DSB_Frontend {
 			<?php endif; ?>
 			
 			<div class="dsb-member-photo" style="background-image: url('<?php echo esc_url( $main_photo ); ?>');">
+				<button
+					type="button"
+					class="dsb-photo-lightbox-trigger dsb-member-photo-zoom"
+					data-photo-url="<?php echo esc_url( $main_photo ); ?>"
+					data-photo-alt="<?php echo esc_attr( sprintf( __( 'Profile photo for %s', 'dating-site-builder' ), $user->display_name ) ); ?>"
+					aria-label="<?php echo esc_attr( sprintf( __( 'Enlarge profile photo for %s', 'dating-site-builder' ), $user->display_name ) ); ?>"
+				>
+					<span aria-hidden="true">View</span>
+				</button>
 			</div>
 			
 			<div class="dsb-member-info">
@@ -2985,6 +2994,17 @@ class DSB_Frontend {
 		?>
 			<div class="dsb-photo-item<?php echo $show_locked ? ' dsb-photo-private-locked' : ''; ?>" data-photo-index="<?php echo esc_attr( $index ); ?>">
 				<img src="<?php echo esc_url( $photo['url'] ); ?>" alt="<?php _e( 'User photo', 'dating-site-builder' ); ?>"<?php echo $show_locked ? ' class="dsb-photo-blurred"' : ''; ?> />
+				<?php if ( ! $show_locked ) : ?>
+					<button
+						type="button"
+						class="dsb-photo-lightbox-trigger dsb-photo-zoom-trigger"
+						data-photo-url="<?php echo esc_url( $photo['url'] ); ?>"
+						data-photo-alt="<?php esc_attr_e( 'User photo', 'dating-site-builder' ); ?>"
+						aria-label="<?php esc_attr_e( 'Enlarge photo', 'dating-site-builder' ); ?>"
+					>
+						<span aria-hidden="true">View</span>
+					</button>
+				<?php endif; ?>
 				<?php if ( $show_locked ) : ?>
 					<div class="dsb-photo-lock-overlay">
 						<span class="dsb-lock-icon">&#128274;</span>

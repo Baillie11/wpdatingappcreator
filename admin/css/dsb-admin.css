@@ -787,3 +787,57 @@ a.dsb-admin-filter-card-tone-default .dsb-admin-filter-card-icon {
 		font-size: 22px;
 	}
 }
+
+/* Compact, darker admin dashboard treatment for adult-site operations. */
+.dsb-dashboard {
+	--dsb-admin-panel: #1a111f;
+	--dsb-admin-border: rgba(255, 255, 255, 0.1);
+	--dsb-admin-accent: #f59e0b;
+}
+
+.dsb-dashboard .dsb-dash-section-title {
+	margin: 18px 0 10px;
+	font-size: 16px;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+
+.dsb-dashboard .dsb-dash-grid {
+	gap: 10px;
+}
+
+.dsb-dashboard .dsb-dash-card {
+	min-height: 0;
+	padding: 12px 14px;
+	border-radius: 7px;
+	background: linear-gradient(145deg, #1a111f, #100b13);
+	border: 1px solid var(--dsb-admin-border);
+	border-left: 3px solid var(--dsb-admin-accent);
+	box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
+}
+
+.dsb-dashboard .dsb-dash-card-icon {
+	width: 34px;
+	height: 34px;
+	font-size: 18px;
+	border-radius: 7px;
+}
+
+.dsb-dashboard .dsb-dash-card-value {
+	color: #fff7ed;
+	font-size: 24px;
+	line-height: 1.05;
+}
+
+.dsb-dashboard .dsb-dash-card-label {
+	color: #f8fafc;
+	font-size: 12px;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+
+.dsb-dashboard .dsb-dash-card-sub {
+	color: #c7b8c8;
+	font-size: 12px;
+	margin-top: 2px;
+}
