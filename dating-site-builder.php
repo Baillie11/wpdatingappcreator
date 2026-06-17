@@ -3,7 +3,7 @@
  * Plugin Name: Dating Site Builder
  * Plugin URI: https://www.clickecommerce.com.au/dating-site-builder
  * Description: Complete dating site solution for WordPress. Turn any WordPress install into a fully functional dating platform with profiles, matching, messaging, and more.
- * Version: 1.7.2
+ * Version: 1.7.3
  * Requires at least: 6.0
  * Requires PHP: 7.4
  * Author: Click eCommerce
@@ -46,7 +46,7 @@ if ( ! defined( 'WPINC' ) ) {
 /**
  * Currently plugin version.
  */
-define( 'DSB_VERSION', '1.7.2' );
+define( 'DSB_VERSION', '1.7.3' );
 define( 'DSB_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'DSB_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'DSB_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
