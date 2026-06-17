@@ -24,6 +24,8 @@ change is shipped.
 ## [Unreleased]
 
 ### Added
+- Member directory density update so the default browse view shows up to 50
+  profiles per page and uses a six-column desktop grid with tighter photo cards.
 - Adult-site visual refresh with a darker compact member-area theme, tighter
   stats/cards/navigation spacing, and clickable enlarged photo previews for
   member cards and profile/gallery photos.

@@ -3284,7 +3284,7 @@ body.dsb-member-page {
 }
 
 .dsb-member-grid {
-	grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)) !important;
+	grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
 	gap: 0.85rem !important;
 	margin-bottom: 1.2rem !important;
 }
@@ -3316,7 +3316,7 @@ body.dsb-member-page {
 }
 
 .dsb-member-photo {
-	height: 205px !important;
+	height: 185px !important;
 	background-color: #110c14 !important;
 }
 
@@ -3624,6 +3624,22 @@ body.dsb-lightbox-open {
 
 	.dsb-messages-wrapper {
 		grid-template-columns: 1fr !important;
+	}
+}
+
+@media (max-width: 1100px) {
+	.dsb-member-grid {
+		grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+	}
+}
+
+@media (max-width: 760px) {
+	.dsb-member-grid {
+		grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+	}
+
+	.dsb-member-photo {
+		height: 175px !important;
 	}
 }
 

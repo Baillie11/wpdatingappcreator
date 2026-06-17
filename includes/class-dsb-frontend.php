@@ -2422,8 +2422,9 @@ class DSB_Frontend {
 		$this->add_member_page_class();
 
 		$atts = shortcode_atts( array(
-			'per_page' => 12,
+			'per_page' => 50,
 		), $atts );
+		$atts['per_page'] = max( 1, min( 100, intval( $atts['per_page'] ) ) );
 
 		$current_user_id = get_current_user_id();
 		$paged = get_query_var( 'paged' ) ? get_query_var( 'paged' ) : 1;
@@ -2466,7 +2467,7 @@ class DSB_Frontend {
 		$args = array(
 			'role__in' => array( 'dating_member', 'dating_premium' ),
 			'exclude'  => array( $current_user_id ),
-			'number'   => intval( $atts['per_page'] ),
+			'number'   => $atts['per_page'],
 			'paged'    => $paged,
 			'meta_query' => array(
 				'relation' => 'AND',
